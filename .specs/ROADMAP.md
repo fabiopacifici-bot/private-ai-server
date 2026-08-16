@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**Current Version**: v1.0 (Phase 1 Complete - Production Ready)
+**Current Version**: v1.2 (Level 1-3 + Desktop App + Pull UX Complete)
 
 **Phase 1 Achievement**: ✅ ALL TASKS COMPLETED
 - ✅ 1.1 Streaming Support - Real-time SSE streaming
@@ -11,6 +11,14 @@
 - ✅ 1.4 Request Timeout & Cancellation - Configurable timeouts
 - ✅ 1.5 Persistent Job Storage - SQLite job persistence
 - ✅ 1.6 Improved Error Messages - Actionable user guidance
+
+**Post-Phase-1 Achievement**: ✅ ALL COMPLETED
+- ✅ Level 1: Model modality classification + sibling probing
+- ✅ Level 2/3: Image/voice sibling orchestration + setup wizard
+- ✅ Tauri desktop app wrapper
+- ✅ Searchable Hub model picker + single-file GGUF pull + loader fix
+
+**Next Up**: 🚧 Release installer with guided setup wizard (see "Next Up" section)
 
 **Production Features**:
 - ✅ Dynamic model loading with vLLM/transformers backends
@@ -76,6 +84,66 @@
 - Improved user experience with progress tracking and clear errors
 - Better resource management with timeouts and cleanup
 - Streaming support enables real-time applications
+
+---
+
+## ✅ Recently Completed (v1.1 – v1.2): Sibling Orchestration, Desktop App, Pull UX
+
+**Status**: ✅ **COMPLETED** (tagged `v1.1.0`, plus follow-ups)
+
+### Level 1 — Model Classification (`21ff2ef`)
+- Classify every model by **modality** (`chat`, `image`, `voice`, `embedding`, …) via `classify_modality()`
+- Probe sibling servers (`/services`) and report availability + install commands
+
+### Level 2 & 3 — Sibling-Server Orchestration + Setup Wizard (`47262cb`)
+- **Image generation** (`Open Fantasia`, port `8765`): `POST /generate` proxied to the sibling, returns raw PNG bytes, preserves `X-Saved-Paths`
+- **Voice synthesis** (`Olly Voice`, port `8766`): `POST /tts` proxied as `multipart/form-data`, returns WAV
+- `src/siblings.py`: `proxy_binary` / `proxy_multipart` / `_http_post` using `http.client` with 5s connect / 180s read timeouts, `SiblingUnavailable`, `SIBLING_INSTALL`
+- **Setup wizard** (`/setup-wizard` UI) guides users through installing missing siblings and wiring `IMAGE_SERVER_URL` / `VOICE_SERVER_URL`
+
+### Contract Fixes + UI Generation Controls (`06923ae`, `6c4cf01`)
+- Aligned proxy with real sibling contracts (raw PNG not JSON; multipart not JSON)
+- Fast-fail with 503 + install prompt when a sibling is unreachable
+- Web UI mode tabs (**Chat / Image / Audio**) that pass the selected model to image/voice generation
+
+### Tauri Desktop App (`5ad038f`)
+- `desktop/` — Tauri v2 wrapper loading `http://127.0.0.1:8005/`
+- `desktop/build.ps1` build helper + `desktop/README.md`
+
+### Pull UX — Searchable Hub Picker + Single-File GGUF (`d5667e6`)
+- `GET /hub/search?q=&limit=` (HfApi.list_models) with modality + download counts
+- Rewritten pull UI: search-as-you-type select picker, progress bar, error handling
+- **Single-file GGUF pull** (`owner/repo/file.gguf`) via `hf_hub_download` with correct `repo_id`/`filename` splitting
+- **GGUF loader fix**: `_probe_model_size` skips local paths — resolves the Muse `HFValidationError`
+- llama-cpp CUDA setup scripts (`.ps1` / `.sh`) + Dockerfile CUDA wheel; `.dockerignore`; Hippocratic License
+
+---
+
+## 🚧 Next Up: Release Installer with Guided Setup
+
+**Goal**: Ship a one-click installer that provisions the environment, configures sibling servers, and launches the desktop app.
+
+**Status**: NOT STARTED
+
+**Priority**: HIGH — this is the last step to make the project usable by non-developers.
+
+### Scope
+1. **Installable artifact** — package the server + desktop app into a single installer (e.g. WiX/Inno Setup on Windows, or a Tauri bundle).
+2. **Guided setup wizard** — first-run flow that:
+   - Detects/installs Python + CUDA + llama-cpp prerequisites
+   - Detects or clones the sibling servers (Open Fantasia, Olly Voice)
+   - Writes `.env` with `IMAGE_SERVER_URL` / `VOICE_SERVER_URL` / memory limits
+   - Starts the server and opens the desktop UI
+3. **Service management** — register the server as a background service / auto-start.
+
+### Acceptance Criteria
+- A non-technical user can install and reach a working Chat + Image + Voice UI without a terminal.
+- Setup wizard is re-runnable (idempotent) and fails gracefully with actionable messages.
+
+### Files to touch
+- `desktop/` (Tauri config, bundle/installer target)
+- `scripts/` (installer bootstrap, env provisioning)
+- `static/` (setup-wizard UI polish)
 
 ---
 
@@ -865,6 +933,20 @@ See `CONTRIBUTING.md` for development workflow.
 
 ## Changelog
 
+### v1.2 (2026-08-16)
+- Searchable Hub model picker in the pull UI (`/hub/search`)
+- Single-file GGUF pull (`owner/repo/file.gguf`) via `hf_hub_download`
+- GGUF loader fix: `_probe_model_size` skips local paths (fixes Muse `HFValidationError`)
+- llama-cpp CUDA setup scripts + Dockerfile CUDA wheel
+- `.dockerignore`, Hippocratic License (HL3-LAW-MIL-SV)
+- Default `MAX_CPU_MEMORY` capped at 24GiB
+
+### v1.1.0 (2026-08-16)
+- Level 1: model modality classification + sibling probing
+- Level 2/3: image/voice sibling orchestration + setup wizard
+- Image generation (Open Fantasia) + voice synthesis (Olly Voice) in the web UI
+- Tauri v2 desktop app wrapper
+
 ### v0.9 (2025-12-17)
 - Initial MVP release
 - Core inference with vLLM/transformers
@@ -875,7 +957,7 @@ See `CONTRIBUTING.md` for development workflow.
 
 ### Upcoming
 
-**v1.0** (Q1 2026): Streaming, health checks, persistent jobs  
+**v1.3** (next): Release installer with guided setup wizard  
 **v1.5** (Q2 2026): Advanced features (sessions, sampling, aliases)  
 **v2.0** (Q3 2026): Production hardening (auth, monitoring, scaling)  
 **v2.5** (Q4 2026): Ecosystem integration (OpenAI API, LangChain)  
