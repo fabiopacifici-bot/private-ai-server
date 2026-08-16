@@ -110,6 +110,30 @@
       padding: 0.6rem;
       margin-top: 0.25rem;
     }
+    .hub-results {
+      max-height: 180px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 0.4rem;
+      background: var(--bg);
+      margin-top: 0.4rem;
+    }
+    .hub-results .hub-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.6rem;
+      cursor: pointer;
+      font-size: 0.72rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .hub-results .hub-item:last-child { border-bottom: none; }
+    .hub-results .hub-item:hover { background: var(--bg-3); }
+    .hub-results .hub-item.selected { background: var(--accent); color: #fff; }
+    .hub-results .hub-id { word-break: break-all; }
+    .hub-results .hub-meta { color: var(--text-muted); white-space: nowrap; font-size: 0.65rem; }
+    .hub-results .hub-item.selected .hub-meta { color: rgba(255,255,255,0.8); }
     .services-panel .svc {
       display: flex;
       align-items: center;
@@ -301,9 +325,20 @@
 
     <div class="section">
       <label>Pull model</label>
-      <input id="pullInput" class="form-control form-control-sm" placeholder="hf.co/org/repo or path.gguf">
       <div class="d-flex gap-2">
-        <button id="pullBtn" class="btn btn-outline-primary btn-sm flex-fill"><i class="fas fa-download me-1"></i>Pull</button>
+        <input id="pullSearch" class="form-control form-control-sm" placeholder="Search HuggingFace Hub…">
+        <button id="pullSearchBtn" class="btn btn-outline-secondary btn-sm" title="Search the Hub"><i class="fas fa-search"></i></button>
+      </div>
+      <select id="hubSelect" class="form-select form-select-sm mt-2" style="display:none;">
+        <option value="">Select a model to pull…</option>
+      </select>
+      <div class="d-flex gap-2 mt-2">
+        <button id="pullBtn" class="btn btn-outline-primary btn-sm flex-fill"><i class="fas fa-download me-1"></i>Pull selected</button>
+      </div>
+      <div id="pullProgressWrap" style="display:none; margin-top:0.5rem;">
+        <div class="progress" style="height:6px;">
+          <div id="pullProgressBar" class="progress-bar" role="progressbar" style="width:0%"></div>
+        </div>
       </div>
       <div id="pullStatus" class="small" style="color:var(--text-muted); font-size:0.75rem; display:none;"></div>
     </div>
@@ -377,7 +412,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
     crossorigin="anonymous"></script>
-  <script src="/static/app.js?v=4"></script>
+  <script src="/static/app.js?v=5"></script>
 </body>
 
 </html>

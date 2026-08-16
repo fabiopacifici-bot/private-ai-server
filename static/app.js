@@ -615,18 +615,63 @@ function setMode(mode) {
 }
 
 // ------------------------------------------------------------------
-// Pull model
+// Pull model (searchable Hub select + progress)
 // ------------------------------------------------------------------
-async function pullModel() {
-  const input = document.getElementById('pullInput');
+async function searchHub() {
+  const q = document.getElementById('pullSearch').value.trim();
+  const select = document.getElementById('hubSelect');
+  if (!q) { select.style.display = 'none'; return; }
+  // Show loading option
+  select.innerHTML = '<option value="">Searching…</option>';
+  select.style.display = 'block';
+  try {
+    const res = await fetch('/hub/search?q=' + encodeURIComponent(q) + '&limit=25');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const models = data.models || [];
+    select.innerHTML = '<option value="">Select a model to pull…</option>';
+    if (models.length === 0) {
+      select.innerHTML = '<option value="">No models found.</option>';
+      return;
+    }
+    models.forEach((m) => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      const tag = m.modality || m.pipeline_tag || '';
+      const dl = m.downloads != null ? ' · ' + (m.downloads / 1000).toFixed(0) + 'k' : '';
+      opt.textContent = m.id + (tag ? ' (' + tag + ')' : '') + dl;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    select.innerHTML = '<option value="">Error: ' + escapeHtml(err.message) + '</option>';
+  }
+}
+
+function setPullStatus(msg, isError) {
   const status = document.getElementById('pullStatus');
-  const model = input.value.trim();
+  status.style.display = 'block';
+  status.textContent = msg || '';
+  status.style.color = isError ? 'var(--danger)' : 'var(--text-muted)';
+  if (!msg) status.style.display = 'none';
+}
+
+function setPullProgress(pct) {
+  const wrap = document.getElementById('pullProgressWrap');
+  const bar = document.getElementById('pullProgressBar');
+  if (pct == null) { wrap.style.display = 'none'; bar.style.width = '0%'; return; }
+  wrap.style.display = 'block';
+  bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+}
+
+async function pullModel() {
+  const select = document.getElementById('hubSelect');
+  const model = select.value ? select.value.trim() : '';
   if (!model) {
-    alert('Enter a model id to pull (e.g. hf.co/org/repo or path.gguf)');
+    alert('Search the Hub and select a model to pull.');
     return;
   }
-  status.style.display = 'block';
-  status.textContent = 'Starting pull of ' + model + '…';
+  setPullStatus('Starting pull of ' + model + '…');
+  setPullProgress(0);
   document.getElementById('pullBtn').disabled = true;
   try {
     const res = await fetch('/pull', {
@@ -634,41 +679,55 @@ async function pullModel() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: model, quantize: 'auto', init: false }),
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || 'Pull failed (HTTP ' + res.status + ')');
+    }
     const data = await res.json();
     const jobId = data.job_id;
-    status.textContent = 'Pulling… (job ' + jobId.slice(0, 8) + ')';
+    setPullStatus('Pulling… (job ' + jobId.slice(0, 8) + ')');
 
     // Poll job progress
     const poll = setInterval(async () => {
       try {
         const jres = await fetch('/jobs/' + jobId);
+        if (!jres.ok) throw new Error('HTTP ' + jres.status);
         const job = await jres.json();
         if (job.status === 'succeeded') {
           clearInterval(poll);
-          status.textContent = '✅ Pulled ' + model;
+          setPullProgress(100);
+          setPullStatus('✅ Pulled ' + model);
           document.getElementById('pullBtn').disabled = false;
-          input.value = '';
+          select.value = '';
+          setPullProgress(null);
           refreshModels();
         } else if (job.status === 'failed') {
           clearInterval(poll);
-          status.textContent = '❌ Failed: ' + (job.error || 'unknown error');
-          status.style.color = 'var(--danger)';
+          setPullProgress(null);
+          setPullStatus('❌ Failed: ' + (job.error || 'unknown error'), true);
           document.getElementById('pullBtn').disabled = false;
         } else {
+          // progress: prefer explicit progress, else bytes/total
+          let pct = job.progress;
+          if (pct == null && job.total_bytes) {
+            pct = (job.downloaded_bytes || 0) / job.total_bytes * 100;
+          }
+          if (pct != null) setPullProgress(Math.round(pct * 100));
           const dl = job.downloaded_bytes || 0;
           const gb = (dl / (1024 ** 3)).toFixed(2);
-          status.textContent = 'Downloading… ' + gb + ' GB';
+          const total = job.total_bytes ? ' / ' + (job.total_bytes / (1024 ** 3)).toFixed(2) + ' GB' : '';
+          setPullStatus('Downloading… ' + gb + ' GB' + total);
         }
       } catch (e) {
         clearInterval(poll);
-        status.textContent = 'Error polling job';
+        setPullProgress(null);
+        setPullStatus('Error polling job: ' + e.message, true);
         document.getElementById('pullBtn').disabled = false;
       }
-    }, 2000);
+    }, 1500);
   } catch (err) {
-    status.textContent = '❌ ' + err.message;
-    status.style.color = 'var(--danger)';
+    setPullProgress(null);
+    setPullStatus('❌ ' + err.message, true);
     document.getElementById('pullBtn').disabled = false;
   }
 }
@@ -705,8 +764,9 @@ function init() {
     els.genTime.textContent = '—';
   });
   document.getElementById('pullBtn').addEventListener('click', pullModel);
-  document.getElementById('pullInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); pullModel(); }
+  document.getElementById('pullSearchBtn').addEventListener('click', searchHub);
+  document.getElementById('pullSearch').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); searchHub(); }
   });
   document.getElementById('setupWizardBtn').addEventListener('click', () => {
     openSetupWizard();

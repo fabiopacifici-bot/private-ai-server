@@ -73,11 +73,12 @@ except Exception:
     transformers_available = False
 
 try:
-    from huggingface_hub import model_info, snapshot_download
+    from huggingface_hub import model_info, snapshot_download, hf_hub_download
     hf_hub_available = True
 except Exception:
     model_info = None
     snapshot_download = None
+    hf_hub_download = None
     hf_hub_available = False
 
 try:
@@ -105,7 +106,7 @@ STREAMING_THREAD_TIMEOUT: int = int(os.getenv("STREAMING_THREAD_TIMEOUT", "30"))
 Q4_THRESHOLD_BYTES: int = int(os.getenv("MODEL_Q4_THRESHOLD_BYTES", str(20 * 10**9)))
 # Layer-splitting: cap GPU memory to leave a safety buffer, allow CPU RAM offload
 MAX_GPU_MEMORY: str = os.getenv("MAX_GPU_MEMORY", "12GiB")
-MAX_CPU_MEMORY: str = os.getenv("MAX_CPU_MEMORY", "48GiB")
+MAX_CPU_MEMORY: str = os.getenv("MAX_CPU_MEMORY", "24GiB")
 # Semicolon-separated extra dirs to scan for GGUF/HF models outside HF_HOME
 MODELS_EXTRA_SCAN_DIRS: list = [
     d.strip() for d in os.getenv("MODELS_EXTRA_SCAN_DIRS", "").split(";")

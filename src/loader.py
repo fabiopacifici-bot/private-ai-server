@@ -110,6 +110,9 @@ def extract_text_from_pipeline_result(val: Any) -> str:
 # ---------------------------------------------------------------------------
 
 def _probe_model_size(model_name: str) -> Optional[int]:
+    # Local files / paths are not valid HF repo ids — skip the Hub probe.
+    if _looks_like_local_path(model_name):
+        return None
     try:
         if config.hf_hub_available and config.model_info is not None:
             info = config.model_info(model_name)
@@ -120,6 +123,19 @@ def _probe_model_size(model_name: str) -> Optional[int]:
     except Exception:
         config.log.exception("Failed to probe model size for %s", model_name)
     return None
+
+
+def _looks_like_local_path(name: str) -> bool:
+    """True if the model id is a local file/path rather than a HF repo id."""
+    if not isinstance(name, str):
+        return True
+    s = name
+    # Windows drive path, backslash, or an existing file => local
+    if "\\" in s or ":" in s or os.path.isfile(s):
+        return True
+    if s.lower().endswith(".gguf"):
+        return True
+    return False
 
 
 def _resolve_local_path(model_name: str) -> Optional[str]:
