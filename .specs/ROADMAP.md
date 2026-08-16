@@ -139,7 +139,7 @@
 
 **Goal**: Ship a one-click installer that provisions the environment, configures sibling servers, and launches the desktop app.
 
-**Status**: NOT STARTED
+**Status**: PLAN CREATED — implementation not started. See [`.specs/plans/release-installer-guided-setup-plan.md`](plans/release-installer-guided-setup-plan.md).
 
 **Priority**: HIGH — this is the last step to make the project usable by non-developers.
 
