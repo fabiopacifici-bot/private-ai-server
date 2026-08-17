@@ -61,14 +61,32 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Heavy/unneeded optional backends are excluded from the base build to
-        # keep it small; they are installed on first run by the setup wizard.
+        # Heavy ML/runtime libraries are excluded from the base build to keep
+        # the installer under the NSIS 2GB limit. The setup wizard provisions
+        # them on first run (CUDA torch + llama-cpp) based on the GPU.
         'vllm',
         'tensorflow',
         'keras',
         'matplotlib',
         'notebook',
         'IPython',
+        'torch',
+        'torchvision',
+        'torchaudio',
+        'transformers',
+        'bitsandbytes',
+        'accelerate',
+        'safetensors',
+        'tokenizers',
+        'sentencepiece',
+        'scipy',
+        'numpy',
+        'PIL',
+        'cv2',
+        'mistral_common',
+        'tiktoken',
+        'protobuf',
+        'huggingface_hub',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
