@@ -133,6 +133,16 @@ The server must:
   and, in later phases, routes to them or prompts the user to install them. This
   keeps `private-ai-server` as a text/vision brain while offering a unified entry
   point to the full local inference stack.
+- **Native installer with guided setup (Tauri + NSIS).**
+  *Implicit alternative:* ship a zip + terminal-based setup instructions.
+  *Chosen:* a Tauri desktop app that doubles as an NSIS installer with an 8-screen
+  wizard (Detect → Services → Run mode → Models → Install → Test → Launch → Done),
+  so non-technical users reach a working Chat + Image + Voice UI without a terminal.
+- **Small server bootstrap + on-first-run runtime provisioning.**
+  *Implicit alternative:* bundle the full torch/transformers runtime in the installer.
+  *Chosen:* PyInstaller ships a ~30 MB bootstrap (heavy ML libs excluded) to stay
+  under the NSIS 2 GB file limit; the wizard installs the CUDA runtime on first run
+  based on detected GPU.
 
 ## Sibling servers
 

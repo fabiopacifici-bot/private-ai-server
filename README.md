@@ -68,21 +68,28 @@ pip install -r requirements.txt
 python -m uvicorn app:app --host 0.0.0.0 --port 8005
 ```
 
-### Desktop App (Tauri)
+### Desktop App & Installer (Tauri)
 
-There's a native **Windows desktop wrapper** in [`desktop/`](desktop/) that opens the
-web UI in its own window. It's a thin Tauri shell that loads `http://127.0.0.1:8005/`.
+There's a native **Windows desktop app + NSIS installer** in [`desktop/`](desktop/)
+that ships the server as a one-click installer with an 8-screen guided setup wizard
+(Detect → Services → Run mode → Models → Install → Test → Launch → Done). It lets
+non-technical users reach a working Chat + Image + Voice UI without a terminal.
 
 ```powershell
-# 1. Start the server (above), then:
+# Package the stripped server bootstrap (from repo root)
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm server.spec
+
+# Build the NSIS installer
 cd desktop
-npm install             # first time only
-.\build.ps1             # debug build
-.\src-tauri\target\debug\private-ai-desktop.exe
+.\build.ps1 -Release
+# output: src-tauri\target\release\bundle\nsis\Private AI_1.1.0_x64-setup.exe
 ```
 
 - Release build with installer: `.\build.ps1 -Release` (output in `src-tauri\target\release\bundle\`)
 - Prerequisites: Rust (rustup), MSVC Build Tools, WebView2 (preinstalled on Win11)
+- The installer ships a ~30 MB server bootstrap; the full CUDA runtime is
+  provisioned on first run by the setup wizard (keeps the installer under NSIS's
+  2 GB limit).
 - See [`desktop/README.md`](desktop/README.md) for full details.
 
 ### WSL2 Startup (Linux / vLLM mode)
@@ -876,7 +883,8 @@ See [`.specs/ROADMAP.md`](.specs/ROADMAP.md) for detailed feature roadmap and ti
   `POST /tts` (Olly Voice :8766), `GET /services`
 - ✅ Fast-fail proxy with short connect timeout + long read timeout
 - ✅ Web UI: Services panel, setup wizard, and Image/Audio generation modes
-- ✅ Tauri desktop app wrapper (`desktop/`)
+- ✅ Native installer with guided setup (Tauri + NSIS, 8-screen wizard)
+- ✅ Server packaging (PyInstaller, ~30 MB bootstrap under NSIS 2 GB limit)
 
 **Next Release (v1.5)**: Advanced Features
 
