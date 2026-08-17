@@ -112,9 +112,9 @@ Chat, Image, and Audio modes. All screenshots live in [`assets/screenshots/`](as
 
 #### Web UI
 
-| Chat | Image | Audio |
-|---|---|---|
-| ![Chat](assets/screenshots/ui-chat.png) | ![Image](assets/screenshots/ui-image.png) | ![Audio](assets/screenshots/ui-audio.png) |
+| Chat | Chat (collapsed sidebar) | Image | Audio |
+|---|---|---|---|
+| ![Chat](assets/screenshots/ui-chat.png) | ![Chat collapsed](assets/screenshots/ui-chat-collapsed.png) | ![Image](assets/screenshots/ui-image.png) | ![Audio](assets/screenshots/ui-audio.png) |
 
 ### WSL2 Startup (Linux / vLLM mode)
 

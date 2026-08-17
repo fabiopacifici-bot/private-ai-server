@@ -26,6 +26,26 @@ const els = {
 };
 
 // ------------------------------------------------------------------
+// Sidebar collapse toggle
+// ------------------------------------------------------------------
+(function () {
+  const btn = document.getElementById('sidebarToggleBtn');
+  if (!btn) return;
+  // Restore persisted state
+  try {
+    if (localStorage.getItem('pai-sidebar-collapsed') === '1') {
+      document.body.classList.add('sidebar-collapsed');
+    }
+  } catch (e) { /* ignore */ }
+  btn.addEventListener('click', () => {
+    const collapsed = document.body.classList.toggle('sidebar-collapsed');
+    try {
+      localStorage.setItem('pai-sidebar-collapsed', collapsed ? '1' : '0');
+    } catch (e) { /* ignore */ }
+  });
+})();
+
+// ------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------
 function escapeHtml(str) {
