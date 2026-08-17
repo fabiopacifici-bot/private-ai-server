@@ -408,10 +408,16 @@ function wire() {
     // Apply start-on-startup if requested.
     if ($('#startOnBoot').checked) {
       try {
-        await invoke('register_autostart', {
-          taskName: 'PrivateAI-Services',
-          command: 'cmd /c start "" /min ' + state.installDir + '\\start-services.cmd',
-        });
+        // Auto-start the bundled server at logon (no admin).
+        const serverCmd = isTauri() ? await bundledServerLaunchCmd() : null;
+        if (serverCmd) {
+          await invoke('register_autostart', {
+            taskName: 'PrivateAI-Services',
+            command: serverCmd,
+          });
+        } else {
+          toast('Server auto-start not available in browser mode.', true);
+        }
       } catch (e) {
         toast('Could not register autostart: ' + e.message, true);
       }
@@ -433,10 +439,31 @@ function renderLaunch() {
 }
 
 // ---------------------------------------------------------------------------
-// Launch — navigate to the web UI (desktop window or browser)
+// Launch — start the server (if needed), then open the web UI
 // ---------------------------------------------------------------------------
+// Resolve a command line that launches the bundled server (for autostart).
+async function bundledServerLaunchCmd() {
+  try {
+    const exe = await invoke('server_binary_path');
+    return 'cmd /c start "" /min "' + exe + '" --port 8005';
+  } catch (e) {
+    return null;
+  }
+}
+
 async function launch() {
   const webUrl = isTauri() ? (await invoke('web_ui_url').catch(() => 'http://127.0.0.1:8005')) : 'http://127.0.0.1:8005';
+
+  // Ensure the server is running before opening the UI.
+  if (isTauri()) {
+    try {
+      await invoke('start_bundled_server');
+      // Give the server a moment to come up.
+      await new Promise((r) => setTimeout(r, 1500));
+    } catch (e) {
+      toast('Could not start the server: ' + e.message, true);
+    }
+  }
 
   if (state.launch === 'desktop' && isTauri()) {
     // Navigate this Tauri window to the web UI.

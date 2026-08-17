@@ -12,10 +12,11 @@
 //! - `probe_services` — probe all known sibling services at once
 //! - `register_autostart` — logon scheduled task (no admin)
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Serialize;
+use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
 /// The main server this app wraps.
@@ -193,6 +194,52 @@ fn web_ui_url() -> String {
     SERVER_URL.to_string()
 }
 
+/// Locate the bundled server executable (`ai-server.exe`) shipped via
+/// `bundle.resources`. Returns its absolute path, or an error if not found.
+#[tauri::command]
+fn server_binary_path(app: tauri::AppHandle) -> Result<String, String> {
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Cannot resolve resource dir: {}", e))?;
+    // bundle.resources copies ../../dist/ai-server into <resource_dir>/ai-server
+    let candidates = [
+        resource_dir.join("ai-server").join("ai-server.exe"),
+        resource_dir.join("ai-server.exe"),
+    ];
+    for c in &candidates {
+        if c.is_file() {
+            return Ok(c.to_string_lossy().to_string());
+        }
+    }
+    Err(format!(
+        "Bundled server not found. Looked in: {}",
+        candidates.iter().map(|c| c.display().to_string()).collect::<Vec<_>>().join(", ")
+    ))
+}
+
+/// Start the bundled server as a detached background process (if not already
+/// running). Returns the process id or an explanatory error.
+#[tauri::command]
+fn start_bundled_server(app: tauri::AppHandle) -> Result<String, String> {
+    // If the server is already reachable, nothing to do.
+    if probe_health(SERVER_URL).is_ok() {
+        return Ok("already-running".to_string());
+    }
+    let exe = server_binary_path(app)?;
+    let exe_path = Path::new(&exe);
+    let dir = exe_path.parent().unwrap_or(Path::new("."));
+
+    let child = std::process::Command::new(&exe)
+        .current_dir(dir)
+        .arg("--port")
+        .arg("8005")
+        .spawn()
+        .map_err(|e| format!("Failed to start server '{}': {}", exe, e))?;
+
+    Ok(format!("started:{}", child.id()))
+}
+
 // ---------------------------------------------------------------------------
 // Provisioning commands (used by the installer's Screen E checklist).
 // These are intentionally best-effort: they detect what's present and report
@@ -325,6 +372,8 @@ pub fn run() {
             register_autostart,
             unregister_autostart,
             web_ui_url,
+            server_binary_path,
+            start_bundled_server,
             check_python,
             check_docker,
             check_cuda,
