@@ -37,7 +37,12 @@ const server = createServer(async (req, res) => {
     }
 
     const data = await readFile(filePath);
-    res.writeHead(200, { 'Content-Type': MIME[extname(filePath)] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': MIME[extname(filePath)] || 'application/octet-stream',
+      // Never cache during dev so edits are picked up immediately and stale
+      // JS (e.g. duplicate declarations from an earlier state) is avoided.
+      'Cache-Control': 'no-store',
+    });
     res.end(data);
   } catch (err) {
     if (err && err.code === 'ENOENT') {
