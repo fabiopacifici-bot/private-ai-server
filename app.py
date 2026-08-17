@@ -82,4 +82,26 @@ async def index():
 if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Run: uvicorn app:app --host 0.0.0.0 --port 8005
+
+def _main() -> None:
+    """Entry point for the packaged binary (`ai-server.exe`) and direct runs.
+
+    Starts uvicorn serving the FastAPI app. Port/host come from environment
+    variables (or `--port`/`--host` CLI args) so the installer/service can
+    launch the server standalone without a terminal.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Private AI Inference Server")
+    parser.add_argument("--host", default=os.getenv("HOST", "0.0.0.0"))
+    parser.add_argument("--port", type=int, default=int(os.getenv("PORT", "8005")))
+    args = parser.parse_args()
+
+    import uvicorn
+
+    config.log.info("Starting Private AI server on %s:%s", args.host, args.port)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+
+
+if __name__ == "__main__":
+    _main()
