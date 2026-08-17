@@ -139,19 +139,22 @@
 
 **Goal**: Ship a one-click installer that provisions the environment, configures sibling servers, and launches the desktop app.
 
-**Status**: PLAN CREATED — implementation not started. See [`.specs/plans/release-installer-guided-setup-plan.md`](plans/release-installer-guided-setup-plan.md).
+**Status**: IN PROGRESS — native installer UI + server packaging done; installer bundling pending. See [`.specs/plans/release-installer-guided-setup-plan.md`](plans/release-installer-guided-setup-plan.md).
 
 **Priority**: HIGH — this is the last step to make the project usable by non-developers.
 
-### Scope
+### ✅ Done
 
-1. **Installable artifact** — package the server + desktop app into a single installer (e.g. WiX/Inno Setup on Windows, or a Tauri bundle).
-2. **Guided setup wizard** — first-run flow that:
-   - Detects/installs Python + CUDA + llama-cpp prerequisites
-   - Detects or clones the sibling servers (Open Fantasia, Olly Voice)
-   - Writes `.env` with `IMAGE_SERVER_URL` / `VOICE_SERVER_URL` / memory limits
-   - Starts the server and opens the desktop UI
-3. **Service management** — register the server as a background service / auto-start.
+- **Native guided installer UI** — 8-screen desktop flow (Detect → Services → Run mode → Models → Install → Test → Launch → Done) in `desktop/dist/` (index.html, styles.css, installer.js) + `dev-server.mjs`
+- **Tauri Rust commands** — 16 commands in `desktop/src-tauri/src/lib.rs`: health probes (`check_server`/`test_connection`/`probe_services`), native folder picker (`pick_folder`), OS defaults (`default_install_dir`/`default_models_dir`), autostart (`register_autostart`), and provisioning (`check_python`/`check_cuda`/`check_docker`/`docker_up`/`clone_sibling`/`write_env`/`start_services`). Added `tauri-plugin-dialog`, `ureq`, `dirs`
+- **Server packaging** — `server.spec` + `scripts/build-server.ps1` produce a standalone `dist/ai-server/ai-server.exe`; added `app.py` `__main__` entry. Verified the packaged exe serves `/health` 200 with CUDA
+- **Setup helper scripts** — `scripts/setup-bootstrap.ps1` (idempotent provisioning, persists `setup_state.json`), `scripts/register-service.ps1` (background service, admin), `scripts/register-autostart.ps1` (logon task, no admin)
+
+### ⏳ Pending
+
+1. **Bundle the server into the installer** — add `dist/ai-server/` as a Tauri `bundle.resources` so the NSIS installer ships the server payload; wire Screen G launch + Screen H start-on-boot to launch the bundled server
+2. **Build NSIS installer** — `npm run tauri build -- --bundles nsis`, then E2E on a clean machine
+3. **Docs** — README, CHANGELOG, ADR
 
 ### Acceptance Criteria
 
@@ -1042,6 +1045,14 @@ See `CONTRIBUTING.md` for development workflow.
 
 ## Changelog
 
+### v1.3 (in progress — release installer with guided setup)
+
+- Native guided installer UI (8-screen desktop flow) in the Tauri app (`desktop/dist/`)
+- 16 Tauri Rust commands: health probes, native folder picker, OS defaults, autostart, provisioning
+- Standalone server packaging via PyInstaller (`server.spec` + `build-server.ps1`); packaged exe serves `/health`
+- `app.py` `__main__` entry so the packaged server starts uvicorn directly
+- Idempotent setup helpers: `setup-bootstrap.ps1`, `register-service.ps1`, `register-autostart.ps1`
+
 ### v1.2 (2026-08-16)
 
 - Searchable Hub model picker in the pull UI (`/hub/search`)
@@ -1069,7 +1080,7 @@ See `CONTRIBUTING.md` for development workflow.
 
 ### Upcoming
 
-**v1.3** (next): Release installer with guided setup wizard  
+**v1.3** (in progress): Release installer with guided setup wizard — native installer UI + server packaging done; NSIS bundling + E2E pending  
 **v1.5** (Q2 2026): Advanced features (sessions, sampling, aliases)  
 **v2.0** (Q3 2026): Production hardening (auth, monitoring, scaling)  
 **v2.5** (Q4 2026): Ecosystem integration (OpenAI API, LangChain)  

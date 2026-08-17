@@ -1,7 +1,7 @@
 # Release Installer with Guided Setup — Plan
 
 Date: 2026-08-17
-Status: Not started
+Status: In progress (Steps 1–4 complete; Steps 5–6 pending)
 Owner: AI Agent
 Priority: HIGH (last step to make the project usable by non-developers)
 
@@ -137,30 +137,38 @@ repairs broken ones.
 
 ## Implementation Steps
 
-### Step 1 — Server packaging (PyInstaller)
+### Step 1 — Server packaging (PyInstaller) — ✅ DONE
 
-- [ ] Add `server.spec` (PyInstaller spec) that includes:
+- [x] Add `server.spec` (PyInstaller spec) that includes:
   - `app.py`, `src/`, `static/`, `models_manifest.json`, `requirements.txt`
   - Hidden imports for FastAPI/uvicorn/transformers used dynamically
-- [ ] Add `scripts/build-server.ps1` that runs PyInstaller and produces
+- [x] Add `scripts/build-server.ps1` that runs PyInstaller and produces
   `dist/ai-server/`
-- [ ] Verify the packaged server starts and serves `/health` with no source tree
+- [x] Verify the packaged server starts and serves `/health` with no source tree
+  (verified: `dist/ai-server/ai-server.exe` returns `/health` 200 with CUDA)
+- [x] Add `app.py` `__main__` entry point so the packaged exe starts uvicorn
+  directly (`--host`/`--port` or `HOST`/`PORT` env)
+- [x] gitignore `build/` and `dist/` (large generated artifacts)
 
 ### Step 2 — Tauri desktop: bundle the server payload + native installer UI
 
-- [ ] Update `desktop/src-tauri/tauri.conf.json`:
-  - Add `bundle.resources` to include the packaged `dist/ai-server/` folder
-  - Add `bundle.targets` for `nsis` (and keep `msi` optional)
-- [ ] Add Tauri **Rust commands** exposed to the installer UI:
-  - `check_server(url)` — probe a `/health` endpoint, return up/down + version
-  - `run_setup(plan)` — orchestrate the bootstrap steps (see Step 3), emitting
-    per-step progress/status events
-  - `pick_folder(title)` — native directory picker (install dir / models dir)
-  - `test_connection(service)` — hit a service's health endpoint, return ok/err
-  - `start_server()` / `register_service()` / `register_autostart()`
-- [ ] Add a **native first-run installer window** (frontend in the desktop app) that
-  drives the guided flow (Step 3). When setup is complete and the server responds,
-  the window loads `http://127.0.0.1:8005/` as today.
+- [x] Add Tauri **Rust commands** exposed to the installer UI (in `lib.rs`):
+  - `check_server(url)` — probe a `/health` endpoint
+  - `test_connection(key)` / `probe_services()` — per-service and bulk health probes
+  - `pick_folder(title)` — native directory picker (install / models dir)
+  - `default_install_dir()` / `default_models_dir()` — OS-appropriate defaults
+  - `register_autostart()` / `unregister_autostart()` — logon scheduled task
+  - `check_python()` / `check_cuda()` / `check_docker()` / `docker_up()` /
+    `clone_sibling()` / `write_env()` / `start_services()` — provisioning
+  - Note: command fns are **non-`pub`** to avoid the tauri 2.11 E0255 `__cmd__`
+    macro collision (build otherwise fails)
+- [x] Add a **native first-run installer window** (frontend in `desktop/dist/`:
+  `index.html`, `styles.css`, `installer.js`) that drives the guided flow (Step 3)
+- [x] Add `dev-server.mjs` static server + wire `tauri.conf.json` (`frontendDist`
+  `../dist`, `devUrl` `localhost:1420`); add `tauri-plugin-dialog` (native pickers),
+  `ureq` (health probe), `dirs` deps
+- [ ] **Pending:** `bundle.resources` to include the packaged `dist/ai-server/`
+  folder in the installer, and `bundle.targets` for `nsis`
 
 ### Step 3 — Guided installer flow (native)
 
@@ -212,9 +220,9 @@ state is carried forward and persisted to `setup_state.json`.
 - Ask: *“Start services on startup?”* (yes/no) → applies Docker autostart,
   background service, or logon scheduled task accordingly.
 
-### Step 4 — Server-side setup helpers
+### Step 4 — Server-side setup helpers — ✅ DONE
 
-- [ ] `scripts/setup-bootstrap.ps1` — reusable provisioning steps invoked by the
+- [x] `scripts/setup-bootstrap.ps1` — reusable provisioning steps invoked by the
   Rust `run_setup` command (idempotent, per-step success/failure + message):
   1. Detect Python / GPU + CUDA; install via winget or bundled embed as needed
   2. Docker mode: verify Docker, compose up
@@ -222,9 +230,10 @@ state is carried forward and persisted to `setup_state.json`.
   4. Write `.env` (`IMAGE_SERVER_URL`, `VOICE_SERVER_URL`, `MAX_GPU_MEMORY`,
      `MAX_CPU_MEMORY`, `HF_HOME`)
   5. Register service / auto-start
-- [ ] `scripts/register-service.ps1` — `sc.exe create` background service (admin)
-- [ ] `scripts/register-autostart.ps1` — logon scheduled task (no admin)
-- [ ] Persist results to `setup_state.json`
+- [x] `scripts/register-service.ps1` — `sc.exe create` background service (admin)
+- [x] `scripts/register-autostart.ps1` — logon scheduled task (no admin)
+- [x] Persist results to `setup_state.json`
+  (verified: bootstrap detects Python 3.10 + RTX 4090, writes `.env`, persists state)
 
 ### Step 5 — Enhanced web UI setup wizard (fallback)
 
@@ -341,12 +350,12 @@ state is carried forward and persisted to `setup_state.json`.
 
 ## Suggested Execution Order
 
-1. **Step 1** (server packaging) — foundation; everything depends on a runnable bundle
-2. **Step 4** (setup helpers: bootstrap + service registration) — core provisioning logic
-3. **Step 2** (Tauri Rust commands + native installer UI) — wires the flow together
-4. **Step 3** (guided installer flow screens A–H) — the interactive UX
-5. **Step 5** (web wizard fallback) — browser parity
-6. **Step 6** (installer + docs) — final packaging and validation
+1. ✅ **Step 1** (server packaging) — done: `server.spec`, `build-server.ps1`, `app.py` `__main__`; verified packaged exe serves `/health`
+2. ✅ **Step 4** (setup helpers: bootstrap + service registration) — done: `setup-bootstrap.ps1`, `register-service.ps1`, `register-autostart.ps1`
+3. ✅ **Step 2** (Tauri Rust commands + native installer UI) — done: 16 commands + `desktop/dist/` installer frontend + `dev-server.mjs`
+4. ✅ **Step 3** (guided installer flow screens A–H) — done: full native flow implemented and browser-tested
+5. ⏳ **Step 5** (web wizard fallback) — the existing `/services` + `/setup-wizard` web UI remains; not yet extended for parity
+6. ⏳ **Step 6** (installer + docs) — pending: bundle `dist/ai-server` into the NSIS installer, E2E, docs
 
 ---
 
