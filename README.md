@@ -92,6 +92,30 @@ cd desktop
   2 GB limit).
 - See [`desktop/README.md`](desktop/README.md) for full details.
 
+### Screenshots
+
+The **guided setup wizard** walks through 8 screens and the **web UI** provides
+Chat, Image, and Audio modes. All screenshots live in [`assets/screenshots/`](assets/screenshots/).
+
+#### Setup wizard (native installer)
+
+| | |
+|---|---|
+| **1. Detect** — probes running services | **2. Services** — choose what to install |
+| ![Detect](assets/screenshots/setup-01-detect.png) | ![Services](assets/screenshots/setup-02-services.png) |
+| **3. Run mode** — local vs Docker + install dir | **4. Models** — model storage location |
+| ![Run mode](assets/screenshots/setup-03-runtime.png) | ![Models](assets/screenshots/setup-04-models.png) |
+| **5. Install** — dependency checklist | **6. Test** — service connection checks |
+| ![Install](assets/screenshots/setup-05-install.png) | ![Test](assets/screenshots/setup-06-test.png) |
+| **7. Launch** — desktop app or browser | **8. Done** — optional start-on-login |
+| ![Launch](assets/screenshots/setup-07-launch.png) | ![Done](assets/screenshots/setup-08-done.png) |
+
+#### Web UI
+
+| Chat | Image | Audio |
+|---|---|---|
+| ![Chat](assets/screenshots/ui-chat.png) | ![Image](assets/screenshots/ui-image.png) | ![Audio](assets/screenshots/ui-audio.png) |
+
 ### WSL2 Startup (Linux / vLLM mode)
 
 For full vLLM performance on WSL2 (or a native Linux machine):

@@ -36,6 +36,11 @@ The release build (`build.ps1 -Release`) produces a single `*-setup.exe` that:
 | **G — Launch** | Launch desktop app or open web UI in a browser. |
 | **H — Done** | Optional "start on log-in" autostart, then Finish. |
 
+## Screenshots
+
+See [`../assets/screenshots/`](../assets/screenshots/) for captures of all 8 setup
+screens plus the Chat / Image / Audio web UI modes.
+
 ## Rust commands (18)
 
 Defined in `src-tauri/src/lib.rs` (all non-`pub fn` — required in Tauri 2.11.5
