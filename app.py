@@ -23,7 +23,7 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 app = FastAPI(
     title="Private AI Inference Server",
-    version="1.0.0",
+    version="1.1.0",
     description=(
         "GPU-optimized FastAPI server for serving Hugging Face LLMs with explicit "
         "download control, automatic quantization, and intelligent caching.\n\n"

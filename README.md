@@ -85,6 +85,16 @@ cd desktop
 # output: src-tauri\target\release\bundle\nsis\Private AI_1.1.0_x64-setup.exe
 ```
 
+For a **single-command release build** that rebuilds both the server bundle and
+the installer, use:
+
+```powershell
+.\scripts\package-release.ps1
+```
+
+A cross-platform `scripts/package-release.sh` is also provided for
+Linux/WSL/CI.
+
 - Release build with installer: `.\build.ps1 -Release` (output in `src-tauri\target\release\bundle\`)
 - Prerequisites: Rust (rustup), MSVC Build Tools, WebView2 (preinstalled on Win11)
 - The installer ships a ~30 MB server bootstrap; the full CUDA runtime is

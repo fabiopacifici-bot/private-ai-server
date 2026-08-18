@@ -65,6 +65,16 @@ to avoid the E0255 `__cmd__ defined multiple times` error):
 
 ## Build the installer
 
+The recommended way is a **single command** that rebuilds both the server bundle
+and the NSIS installer:
+
+```powershell
+# from the repo root — rebuilds server bundle + installer
+.\scripts\package-release.ps1
+```
+
+Or run the two steps manually:
+
 ```powershell
 # 1. Package the stripped server bootstrap (from repo root)
 .\.venv\Scripts\python.exe -m PyInstaller --noconfirm server.spec
@@ -74,6 +84,10 @@ cd desktop
 .\build.ps1 -Release
 # output: src-tauri\target\release\bundle\nsis\Private AI_1.1.0_x64-setup.exe
 ```
+
+`package-release.ps1` also supports `-Clean`, `-SkipServer`, and `-SkipDesktop`
+switches. A cross-platform `scripts/package-release.sh` is provided for
+Linux/WSL/CI (note: the NSIS installer itself is Windows-only).
 
 ## Development
 
