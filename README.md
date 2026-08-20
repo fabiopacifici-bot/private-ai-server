@@ -1,12 +1,28 @@
-# AI Inference Server
+# Private AI — Local Inference Server & Desktop Stack
 
-A high-performance, GPU-optimized FastAPI server for serving Hugging Face language models. Built as an Ollama-compatible alternative with dynamic model loading, automatic 4-bit quantization for large models, and explicit control over downloads.
+A self-hosted, Ollama-compatible **local AI stack** that runs entirely on your own
+hardware. It combines a GPU-optimized FastAPI server (`app.py` + `src/`) with a
+**native Windows desktop app and installer** (Tauri + NSIS) that walks non-technical
+users through setup, plus a **web UI** for Chat, Image, and Audio.
+
+The server dynamically loads Hugging Face language models with GPU acceleration,
+automatic 4-bit quantization for large models, explicit download control, and
+intelligent caching. It also **orchestrates sibling microservices** (Open Fantasia
+for image generation, Olly Voice for speech) so a single entry point covers text,
+vision, image, and voice.
+
+> **Current status — v1.1.0**: Production-ready. Local inference orchestrator with
+> model modality classification, sibling-server orchestration, web UI, and a native
+> guided-setup installer. See [Roadmap](#roadmap) for details.
 
 [![Hippocratic License HL3-LAW-MIL-SV](https://img.shields.io/static/v1?label=Hippocratic%20License&message=HL3-LAW-MIL-SV&labelColor=5e2751&color=bc8c3d)](https://firstdonoharm.dev/version/3/0/law-mil-sv.html)
 
 ## Overview
 
-**What it does:** Dynamically loads and serves LLMs from Hugging Face Hub with GPU acceleration, automatic quantization, and intelligent caching.
+**What it does:** Runs a private local inference stack on your machine — a FastAPI
+server that loads and serves LLMs from Hugging Face Hub with GPU acceleration,
+automatic quantization, and intelligent caching, plus a desktop installer and web UI
+so you never need a terminal.
 
 **Why use it:**
 
@@ -16,6 +32,9 @@ A high-performance, GPU-optimized FastAPI server for serving Hugging Face langua
 - 🔧 **Production-ready**: Background job system for non-blocking downloads, CUDA OOM prevention, MoE/custom model support
 - 📊 **Observable**: Comprehensive diagnostics endpoints (`/health`, `/status`, `/diag`, `/jobs`)
 - 🔄 **Streaming**: Real-time response streaming with Server-Sent Events (SSE)
+- 🖥️ **No-terminal setup**: Native Windows installer with an 8-screen guided setup wizard (Tauri + NSIS)
+- 🌐 **Web UI**: Chat, Image, and Audio modes served directly by the server
+- 🧩 **Sibling orchestration**: Routes image generation (Open Fantasia) and speech (Olly Voice) from one entry point
 
 **Key Features:**
 
