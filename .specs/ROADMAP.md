@@ -2,7 +2,7 @@
 
 ## Project Status
 
-**Current Version**: v1.2 (Level 1-3 + Desktop App + Pull UX Complete)
+**Current Version**: v1.1.0 (Local Inference Orchestrator — production-ready)
 
 **Phase 1 Achievement**: ✅ ALL TASKS COMPLETED
 
@@ -19,8 +19,12 @@
 - ✅ Level 2/3: Image/voice sibling orchestration + setup wizard
 - ✅ Tauri desktop app wrapper
 - ✅ Searchable Hub model picker + single-file GGUF pull + loader fix
+- ✅ **Release installer with guided setup** (Tauri + NSIS, 8-screen wizard)
+- ✅ Single-command release packaging (`scripts/package-release.ps1` / `.sh`)
+- ✅ Chat UI redesigned to match the setup wizard (dark theme, collapsible sidebar)
+- ✅ Case-study screenshots + updated README / ADR / CHANGELOG
 
-**Next Up**: 🚧 Release installer with guided setup wizard (see "Next Up" section)
+**Next Up**: See the "Next Up" section below (Phase 2: Advanced Features, v1.5).
 
 **Production Features**:
 
@@ -135,37 +139,46 @@
 
 ---
 
-## 🚧 Next Up: Release Installer with Guided Setup
+## ✅ COMPLETED: Release Installer with Guided Setup
 
 **Goal**: Ship a one-click installer that provisions the environment, configures sibling servers, and launches the desktop app.
 
-**Status**: IN PROGRESS — native installer UI + server packaging done; installer bundling pending. See [`.specs/plans/release-installer-guided-setup-plan.md`](plans/release-installer-guided-setup-plan.md).
+**Status**: ✅ **COMPLETED** (v1.1.0) — installer shipped, server bundled, E2E validated.
 
-**Priority**: HIGH — this is the last step to make the project usable by non-developers.
+**Priority**: HIGH — this was the last step to make the project usable by non-developers.
 
 ### ✅ Done
 
 - **Native guided installer UI** — 8-screen desktop flow (Detect → Services → Run mode → Models → Install → Test → Launch → Done) in `desktop/dist/` (index.html, styles.css, installer.js) + `dev-server.mjs`
-- **Tauri Rust commands** — 16 commands in `desktop/src-tauri/src/lib.rs`: health probes (`check_server`/`test_connection`/`probe_services`), native folder picker (`pick_folder`), OS defaults (`default_install_dir`/`default_models_dir`), autostart (`register_autostart`), and provisioning (`check_python`/`check_cuda`/`check_docker`/`docker_up`/`clone_sibling`/`write_env`/`start_services`). Added `tauri-plugin-dialog`, `ureq`, `dirs`
-- **Server packaging** — `server.spec` + `scripts/build-server.ps1` produce a standalone `dist/ai-server/ai-server.exe`; added `app.py` `__main__` entry. Verified the packaged exe serves `/health` 200 with CUDA
+- **Tauri Rust commands** — 18 commands in `desktop/src-tauri/src/lib.rs`: health probes (`check_server`/`test_connection`/`probe_services`), native folder picker (`pick_folder`), OS defaults (`default_install_dir`/`default_models_dir`), autostart (`register_autostart`/`unregister_autostart`), web UI (`web_ui_url`), provisioning (`check_python`/`check_cuda`/`check_docker`/`docker_up`/`clone_sibling`/`write_env`/`start_services`/`start_bundled_server`/`server_binary_path`). Added `tauri-plugin-dialog`, `ureq`, `dirs`
+- **Server packaging** — `server.spec` + `scripts/build-server.ps1` produce a standalone `dist/ai-server/ai-server.exe`; added `app.py` `__main__` entry. Verified the packaged exe serves `/health` 200 with CUDA. Heavy ML libs excluded → ~33 MB bundle (under NSIS 2 GB limit)
+- **Bundle server into installer** — `dist/ai-server/` added as a Tauri `bundle.resources`; Screen G launch + Screen H start-on-boot wired to the bundled server (`f19c694`)
+- **NSIS installer built** — `npm run tauri build -- --bundles nsis` → `desktop/src-tauri/target/release/bundle/nsis/Private AI_1.1.0_x64-setup.exe` (~19 MB)
 - **Setup helper scripts** — `scripts/setup-bootstrap.ps1` (idempotent provisioning, persists `setup_state.json`), `scripts/register-service.ps1` (background service, admin), `scripts/register-autostart.ps1` (logon task, no admin)
+- **Single-command release packaging** — `scripts/package-release.ps1` (re)builds the server bundle + installer in one go; cross-platform `scripts/package-release.sh` for Linux/WSL/CI (`62d5448`)
+- **Chat UI redesign** — dark theme matching the setup wizard, brand logo, collapsible sidebar (`9a9d9b1`, `ef870e5`)
+- **Docs** — README, CHANGELOG, ADR, architecture diagram, case-study screenshots (`assets/screenshots/`) all updated (`404f100`, `6491154`, `2d44516`)
 
-### ⏳ Pending
-
-1. **Bundle the server into the installer** — add `dist/ai-server/` as a Tauri `bundle.resources` so the NSIS installer ships the server payload; wire Screen G launch + Screen H start-on-boot to launch the bundled server
-2. **Build NSIS installer** — `npm run tauri build -- --bundles nsis`, then E2E on a clean machine
-3. **Docs** — README, CHANGELOG, ADR
-
-### Acceptance Criteria
+### Acceptance Criteria — MET
 
 - A non-technical user can install and reach a working Chat + Image + Voice UI without a terminal.
 - Setup wizard is re-runnable (idempotent) and fails gracefully with actionable messages.
 
-### Files to touch
+### Files touched
 
-- `desktop/` (Tauri config, bundle/installer target)
-- `scripts/` (installer bootstrap, env provisioning)
-- `static/` (setup-wizard UI polish)
+- `desktop/` (Tauri config, bundle/installer target, native installer UI)
+- `scripts/` (installer bootstrap, env provisioning, release packaging)
+- `static/` (setup-wizard UI polish, chat UI redesign)
+- `server.spec`, `app.py` (server bundling + version alignment)
+
+---
+
+## 🚧 Next Up: Phase 2 — Advanced Features (v1.5)
+
+The release installer milestone is complete. The next workstream is **Phase 2:
+Advanced Features (v1.5)** below — multi-turn conversation context, model
+preloading, and the other items in the Phase 2 list. Prioritize the items marked
+HIGH/MEDIUM in Phase 2.
 
 ---
 

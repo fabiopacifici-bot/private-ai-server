@@ -1,9 +1,9 @@
 # Release Installer with Guided Setup — Plan
 
 Date: 2026-08-17
-Status: In progress (Steps 1–4 complete; Steps 5–6 pending)
+Status: ✅ COMPLETED (v1.1.0) — installer shipped, server bundled, E2E validated
 Owner: AI Agent
-Priority: HIGH (last step to make the project usable by non-developers)
+Priority: HIGH (completed — last step to make the project usable by non-developers)
 
 ---
 
