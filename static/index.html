@@ -328,6 +328,12 @@
       display: block;
     }
     .msg .bubble audio.gen-audio { width: 100%; margin-top: 0.25rem; }
+    .msg .bubble video.gen-video {
+      max-width: 100%;
+      border-radius: 0.5rem;
+      display: block;
+      margin-top: 0.25rem;
+    }
     .msg .bubble .gen-meta {
       font-size: 0.7rem;
       color: var(--text-muted);
@@ -457,6 +463,7 @@
       <div class="mode-tabs">
         <button class="mode-tab active" data-mode="chat"><i class="fas fa-comments me-1"></i>Chat</button>
         <button class="mode-tab" data-mode="image"><i class="fas fa-image me-1"></i>Image</button>
+        <button class="mode-tab" data-mode="video"><i class="fas fa-video me-1"></i>Video</button>
         <button class="mode-tab" data-mode="audio"><i class="fas fa-volume-up me-1"></i>Audio</button>
       </div>
       <div class="input-row">

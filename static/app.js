@@ -6,7 +6,7 @@
 let conversation = [];
 let abortController = null;
 let genStartTime = null;
-let currentMode = 'chat'; // 'chat' | 'image' | 'audio'
+let currentMode = 'chat'; // 'chat' | 'image' | 'video' | 'audio'
 
 const els = {
   model: document.getElementById('model'),
@@ -96,6 +96,7 @@ async function refreshModels() {
       chat: [],
       vision: [],
       imagegen: [],
+      video: [],
       voice: [],
       embeddings: [],
       unknown: [],
@@ -110,11 +111,12 @@ async function refreshModels() {
       chat: 'Chat',
       vision: 'Vision',
       imagegen: 'Image Gen',
+      video: 'Video Gen',
       voice: 'Voice',
       embeddings: 'Embeddings',
       unknown: 'Other',
     };
-    const groupOrder = ['chat', 'vision', 'imagegen', 'voice', 'embeddings', 'unknown'];
+    const groupOrder = ['chat', 'vision', 'imagegen', 'video', 'voice', 'embeddings', 'unknown'];
 
     groupOrder.forEach((mod) => {
       const list = groups[mod];
@@ -157,6 +159,7 @@ async function refreshModels() {
 // ------------------------------------------------------------------
 const SERVICE_LABELS = {
   imagegen: { name: 'Open Fantasia', port: 8765, icon: 'fa-image' },
+  video: { name: 'Open Fantasia', port: 8765, icon: 'fa-video' },
   voice: { name: 'Olly Voice', port: 8766, icon: 'fa-microphone' },
 };
 
@@ -526,6 +529,12 @@ function addMediaMessage(kind, blob, url, meta) {
     img.src = url;
     img.alt = 'Generated image';
     bubble.appendChild(img);
+  } else if (kind === 'video') {
+    const video = document.createElement('video');
+    video.className = 'gen-video';
+    video.controls = true;
+    video.src = url;
+    bubble.appendChild(video);
   } else if (kind === 'audio') {
     const audio = document.createElement('audio');
     audio.className = 'gen-audio';
@@ -579,6 +588,39 @@ async function generateImage() {
   }
 }
 
+async function generateVideo() {
+  const prompt = els.message.value.trim();
+  if (!prompt) { setGenStatus('Enter a prompt for video generation.', true); return; }
+
+  setGenStatus('🎬 Generating video via Open Fantasia… (this can take a few minutes)');
+  els.submit.disabled = true;
+  addMessage('user', prompt);
+  els.message.value = '';
+  const selectedModel = els.model.value;
+  try {
+    const res = await fetch('/video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: prompt, model: selectedModel || null }),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || 'Video generation failed (HTTP ' + res.status + ')');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const saved = res.headers.get('X-Saved-Paths') || '';
+    addMediaMessage('video', blob, url, saved ? 'Saved: ' + saved : '');
+    setGenStatus('✅ Video generated.');
+  } catch (err) {
+    console.error(err);
+    setGenStatus('❌ ' + err.message, true);
+    addMessage('assistant', 'Error: ' + err.message);
+  } finally {
+    els.submit.disabled = false;
+  }
+}
+
 async function generateAudio() {
   const text = els.message.value.trim();
   if (!text) { setGenStatus('Enter text to synthesize speech.', true); return; }
@@ -622,6 +664,10 @@ function setMode(mode) {
     els.message.placeholder = 'Describe the image to generate… (Enter to generate)';
     submit.innerHTML = '<i class="fas fa-image"></i>';
     hint.textContent = 'Generates an image via Open Fantasia (:8765).';
+  } else if (mode === 'video') {
+    els.message.placeholder = 'Describe the video to generate… (Enter to generate)';
+    submit.innerHTML = '<i class="fas fa-video"></i>';
+    hint.textContent = 'Generates a short video via Open Fantasia (:8765). May take a few minutes.';
   } else if (mode === 'audio') {
     els.message.placeholder = 'Type text to speak… (Enter to synthesize)';
     submit.innerHTML = '<i class="fas fa-volume-up"></i>';
@@ -757,6 +803,7 @@ async function pullModel() {
 // ------------------------------------------------------------------
 function handleSubmit() {
   if (currentMode === 'image') { generateImage(); return; }
+  if (currentMode === 'video') { generateVideo(); return; }
   if (currentMode === 'audio') { generateAudio(); return; }
   sendChat();
 }

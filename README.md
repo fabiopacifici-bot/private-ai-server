@@ -3,13 +3,13 @@
 A self-hosted, Ollama-compatible **local AI stack** that runs entirely on your own
 hardware. It combines a GPU-optimized FastAPI server (`app.py` + `src/`) with a
 **native Windows desktop app and installer** (Tauri + NSIS) that walks non-technical
-users through setup, plus a **web UI** for Chat, Image, and Audio.
+users through setup, plus a **web UI** for Chat, Image, Video, and Audio.
 
 The server dynamically loads Hugging Face language models with GPU acceleration,
 automatic 4-bit quantization for large models, explicit download control, and
 intelligent caching. It also **orchestrates sibling microservices** (Open Fantasia
-for image generation, Olly Voice for speech) so a single entry point covers text,
-vision, image, and voice.
+for image & video generation, Olly Voice for speech) so a single entry point covers
+text, vision, image, video, and voice.
 
 > **Current status — v1.1.0**: Production-ready. Local inference orchestrator with
 > model modality classification, sibling-server orchestration, web UI, and a native
@@ -33,8 +33,8 @@ so you never need a terminal.
 - 📊 **Observable**: Comprehensive diagnostics endpoints (`/health`, `/status`, `/diag`, `/jobs`)
 - 🔄 **Streaming**: Real-time response streaming with Server-Sent Events (SSE)
 - 🖥️ **No-terminal setup**: Native Windows installer with an 8-screen guided setup wizard (Tauri + NSIS)
-- 🌐 **Web UI**: Chat, Image, and Audio modes served directly by the server
-- 🧩 **Sibling orchestration**: Routes image generation (Open Fantasia) and speech (Olly Voice) from one entry point
+- 🌐 **Web UI**: Chat, Image, Video, and Audio modes served directly by the server
+- 🧩 **Sibling orchestration**: Routes image & video generation (Open Fantasia) and speech (Olly Voice) from one entry point
 
 **Key Features:**
 
@@ -751,11 +751,11 @@ The `/chat/multimodal` endpoint is the recommended backend for voice pipelines a
 
 ---
 
-## Sibling orchestration (image generation & voice)
+## Sibling orchestration (image, video & voice)
 
-This server is the **text/vision brain** of a local inference stack. Image generation
-(Open Fantasia :8765) and voice (Olly Voice :8766) are handled by dedicated sibling
-servers. This server probes them, routes to them, and guides setup.
+This server is the **text/vision brain** of a local inference stack. Image & video
+generation (Open Fantasia :8765) and voice (Olly Voice :8766) are handled by
+dedicated sibling servers. This server probes them, routes to them, and guides setup.
 
 ### POST /generate — image generation (→ Open Fantasia)
 
@@ -775,6 +775,21 @@ If Open Fantasia isn't running, returns **503** with an install command:
 { "detail": "Open Fantasia (http://127.0.0.1:8765) is not running.\nInstall it with:\n  git clone https://github.com/fabiopacifici-bot/open-fantasia-imagegen\nThen start it and retry." }
 ```
 
+### POST /video — video generation (→ Open Fantasia)
+
+Routes a text-to-video request to Open Fantasia's `/video` endpoint (Wan2.1). The
+JSON body is forwarded as-is, and the **raw MP4 bytes** (`video/mp4`) are returned
+with the `X-Saved-Paths` header pointing to where the sibling saved the file.
+
+```bash
+curl -X POST http://localhost:8005/video \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"a cat walking through a neon city at night","model":"Wan-AI/Wan2.1-T2V-1.3B"}'
+```
+
+If Open Fantasia isn't running, returns **503** with an install command (same as
+`/generate`).
+
 ### POST /tts — text to speech (→ Olly Voice)
 
 Routes a TTS request to Olly Voice. The JSON body's `text` field is sent to the
@@ -788,9 +803,9 @@ curl -X POST http://localhost:8005/tts \
 
 If Olly Voice isn't running, returns **503** with an install command.
 
-> **Note:** both `/generate` and `/tts` return **raw binary bytes** (image/audio),
-> not JSON. When a sibling is unreachable the proxy fails fast with a 503 and the
-> install command instead of hanging.
+> **Note:** `/generate`, `/video`, and `/tts` return **raw binary bytes**
+> (image/video/audio), not JSON. When a sibling is unreachable the proxy fails fast
+> with a 503 and the install command instead of hanging.
 
 ### GET /services — sibling status + install commands
 
@@ -801,6 +816,9 @@ curl http://localhost:8005/services
 ```json
 {
   "imagegen": { "available": false, "url": "http://127.0.0.1:8765",
+                "service": "Open Fantasia",
+                "install": "git clone https://github.com/fabiopacifici-bot/open-fantasia-imagegen" },
+  "video":    { "available": false, "url": "http://127.0.0.1:8765",
                 "service": "Open Fantasia",
                 "install": "git clone https://github.com/fabiopacifici-bot/open-fantasia-imagegen" },
   "voice":    { "available": false, "url": "http://127.0.0.1:8766",
@@ -931,11 +949,11 @@ See [`.specs/ROADMAP.md`](.specs/ROADMAP.md) for detailed feature roadmap and ti
 
 **Current Release (v1.1.0)**: ✅ Local Inference Orchestrator - COMPLETED
 
-- ✅ Model modality classification (chat / vision / imagegen / voice / embeddings)
+- ✅ Model modality classification (chat / vision / imagegen / video / voice / embeddings)
 - ✅ Sibling-server orchestration: `POST /generate` (Open Fantasia :8765),
-  `POST /tts` (Olly Voice :8766), `GET /services`
+  `POST /video` (Open Fantasia :8765), `POST /tts` (Olly Voice :8766), `GET /services`
 - ✅ Fast-fail proxy with short connect timeout + long read timeout
-- ✅ Web UI: Services panel, setup wizard, and Image/Audio generation modes
+- ✅ Web UI: Services panel, setup wizard, and Image/Video/Audio generation modes
 - ✅ Native installer with guided setup (Tauri + NSIS, 8-screen wizard)
 - ✅ Server packaging (PyInstaller, ~30 MB bootstrap under NSIS 2 GB limit)
 
