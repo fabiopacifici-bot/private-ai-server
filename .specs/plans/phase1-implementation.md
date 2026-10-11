@@ -1023,18 +1023,24 @@ RTX 4090 Mobile is a separate research exercise, not wired here.
   passed guarded into transformers `generate()` (chat streaming + non-streaming).
 - Defaults aligned for the target GPU: `MAX_CACHE_MODELS=1`, `MAX_CPU_MEMORY=48GiB`.
 
-### Not bundled — dependency + integration point
-EXL2 (`exllamav2`) and AWQ (`autoawq`) are NOT dependencies of this server.
-They need their own engines (exllamav2 / autoawq + model-format converters) and
-would be servable only via dedicated loader backends, not the transformers path.
-To wire later:
-1. Add `exllamav2` / `autoawq` as optional deps (lazy-import guard like vllm).
-2. Model picker / classify step to select quantized repo formats (`.safetensors`
-   AWQ or `.safetensors`/`.exl2` dirs) and set `preferred_quantized`.
-3. A new loader backend (mirror the `_try_vllm` / `_load_transformers` pattern)
-   that reads `TRANSFORMERS_QUANT=awq|exl2` and dispatches to the engine.
-4. For AWQ via transformers: `quantization_config=AwqConfig(bits=4)` + the repo's
-   already-quantized weights; requires `autoawq`.
+### AWQ — wired (2026-10-11)
+AWQ (`autoawq` + transformers `AwqConfig`) is now an optional dependency of
+this server and the load path is wired end-to-end:
+1. `autoawq` added to `requirements.txt` (lazy-import guard in `config.py`,
+   pattern matching vllm/bitsandbytes — `config.autoawq_available`).
+2. `_load_transformers` honors `TRANSFORMERS_QUANT=awq`: engages
+   `AwqConfig(bits=4, zero_point=True, version="gemm")` against the repo's
+   pre-quantized `.safetensors` when both the engine and `AwqConfig` are
+   present; otherwise logs a warning and falls back to the auto NF4 decision
+   (non-breaking).
+3. Proven: `config.autoawq_available = True`, `AwqConfig` import OK in the
+   WSL venv; unit tests cover the decision surface + degradation path.
 
-Until then `TRANSFORMERS_QUANT=awq|exl2` logs a warning and falls back to the
+### EXL2 — not bundled (integration point only)
+EXL2 (`exllamav2`) is NOT a dependency of this server. Wiring it later means:
+1. Add `exllamav2` as an optional dep (lazy-import guard like vllm).
+2. A loader backend (mirror the `_load_transformers` pattern) that reads
+   `TRANSFORMERS_QUANT=exl2` and dispatches to the engine.
+
+Until then `TRANSFORMERS_QUANT=exl2` logs a warning and falls back to the
 auto NF4 decision (non-breaking).
