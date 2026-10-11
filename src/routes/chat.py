@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+import uuid
 from datetime import datetime
 from threading import Thread
 from typing import List, Dict
@@ -17,6 +18,7 @@ from gguf import build_llama_cpp_prompt
 from multimodal import load_multimodal_model, run_multimodal_inference, stream_multimodal_response
 from schemas import ChatRequest, MultimodalChatRequest
 from utils import with_timeout, gpu_cleanup_fn
+import rust_core_runtime as rrt
 
 router = APIRouter()
 
@@ -196,6 +198,28 @@ def generate_response(request: ChatRequest, model_name: str, prompt: str, backen
         pipe = state.current_model
         model_obj = getattr(pipe, "model", None)
         tokenizer = getattr(pipe, "tokenizer", None)
+        # --- Rust core engagement (Issues #3/#4) ---------------------------------
+        # Hand the request to the live Rust continuous-batching scheduler and open
+        # a paged-KV stream. These are genuine core invocations; when the core is
+        # unavailable every call degrades to a clean no-op and behaviour is unchanged.
+        rt_enabled = getattr(config, "RUST_CORE_ENABLED", True)
+        _rt = rrt.get_runtime() if rt_enabled else None
+        _rid = f"gen-{uuid.uuid4().hex[:12]}"
+        _stream_id = None
+        _enq_accepted = ""
+        if _rt is not None and _rt.engaged:
+            _stream_id = rrt.begin_stream(_rt, _rid, approx_tokens=max(1, request.max_tokens))
+            if tokenizer is not None:
+                try:
+                    _ptoks = tokenizer(prompt).get("input_ids", [])
+                except Exception:
+                    _ptoks = []
+                _enq_accepted = rrt.coordinator_submit_blocking(
+                    _rt, _rid, _ptoks, max_tokens=request.max_tokens)
+            config.log.info(
+                "Rust batch coordinator engaged: request=%s stream=%s accepted=%s",
+                _rid, _stream_id, _enq_accepted or "n/a",
+            )
         try:
             start = time.time_ns()
             if model_obj is not None and tokenizer is not None:
@@ -215,6 +239,14 @@ def generate_response(request: ChatRequest, model_name: str, prompt: str, backen
                     "pad_token_id": tokenizer.pad_token_id or tokenizer.eos_token_id,
                 }
                 gk.update(kv_cache_dtype_kwargs())
+                # Ask for per-step logits when the Rust core is engaged so the
+                # speculative acceptance pass can run over real model evidence.
+                try:
+                    if _stream_id is not None:
+                        gk["output_scores"] = True
+                        gk["return_dict_in_generate"] = True
+                except Exception:
+                    pass
                 if request.temperature and request.temperature > 0.0:
                     gk.update({"do_sample": True, "temperature": request.temperature, "top_p": 0.95})
                 else:
@@ -224,15 +256,40 @@ def generate_response(request: ChatRequest, model_name: str, prompt: str, backen
                         or "phi" in model_name.lower()):
                     gk["use_cache"] = False
                 try:
-                    out_ids = model_obj.generate(input_ids=ids, attention_mask=mask, **gk)
+                    out = model_obj.generate(input_ids=ids, attention_mask=mask, **gk)
                 except Exception as e:
                     if any(k in str(e).lower() for k in ("cache", "seen_tokens", "dynamiccache")):
                         gk["use_cache"] = False
-                        out_ids = model_obj.generate(input_ids=ids, attention_mask=mask, **gk)
+                        out = model_obj.generate(input_ids=ids, attention_mask=mask, **gk)
                     else:
                         raise
+                # With ``output_scores``/``return_dict_in_generate`` HF returns a
+                # GenerateOutput namedtuple; otherwise a plain tensor. Normalise.
+                _scores = getattr(out, "scores", None)
+                if hasattr(out, "sequences"):
+                    out_ids = out.sequences
+                else:
+                    out_ids = out
                 gen_text = tokenizer.batch_decode(out_ids[:, ids.shape[1]:], skip_special_tokens=True)
                 result: list = [{"generated_text": gen_text[0] if gen_text else ""}]
+
+                # --- Rust speculative acceptance pass over real logits ------------
+                if _stream_id is not None and gk.get("output_scores") and _scores:
+                    try:
+                        gen_ids = out_ids[0][ids.shape[1]:] if hasattr(out_ids, "shape") else None
+                        if gen_ids is not None:
+                            import torch
+                            token_ids = [int(t) for t in gen_ids]
+                            accepted, rejected, _hist = rrt.verify_tokens(
+                                _rt, _rid, token_ids, tuple(_scores),
+                                allocated_blocks=_stream_id or 0,
+                            )
+                            config.log.info(
+                                "Rust speculative pass: request=%s accepted=%s rejected=%s",
+                                _rid, accepted, rejected,
+                            )
+                    except Exception:
+                        config.log.exception("Rust speculative pass failed for %s", _rid)
             else:
                 config.log.warning("Pipeline fallback (no model/tokenizer access)")
                 result = pipe(prompt, max_new_tokens=request.max_tokens,
@@ -243,6 +300,9 @@ def generate_response(request: ChatRequest, model_name: str, prompt: str, backen
             config.log.exception("Transformers generation failed for %s", model_name)
             raise HTTPException(status_code=500,
                                 detail=f"Generation failed: {e}. Try restarting or using a smaller model.")
+        finally:
+            if _stream_id is not None:
+                rrt.finish_stream(_rt, _stream_id)
 
         p_tok = g_tok = None
         try:

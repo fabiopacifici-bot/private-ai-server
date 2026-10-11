@@ -128,6 +128,9 @@ OLLAMA_MODELS_DIR: Optional[str] = os.getenv("OLLAMA_MODELS_DIR") or None
 # and availability probing (Level 1 of the local-inference orchestrator).
 IMAGE_SERVER_URL: Optional[str] = os.getenv("IMAGE_SERVER_URL") or "http://127.0.0.1:8765"
 VOICE_SERVER_URL: Optional[str] = os.getenv("VOICE_SERVER_URL") or "http://127.0.0.1:8766"
+# Set False (or PRIVATE_AI_DISABLE_RUST_CORE=1) to force the Python-only path even
+# when the Rust PyO3 inference core is installed and importable.
+RUST_CORE_ENABLED: bool = os.getenv("PRIVATE_AI_DISABLE_RUST_CORE", "").strip().lower() not in {"1", "true", "yes"}
 
 server_start_time: float = time.time()
 download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_PULLS)
