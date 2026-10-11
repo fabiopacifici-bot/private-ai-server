@@ -1,0 +1,24 @@
+# Normalize line endings: text files are stored as LF in the repo,
+# checked out with the platform default (CRLF on Windows).
+* text=auto
+
+# Explicit binary formats — never line-ending normalize or diff these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.dll binary
+*.exe binary
+*.pyd binary
+*.so binary
+*.wasm binary
+*.lock binary
+*.map binary
+
+# Windows PowerShell scripts: force LF in the repo, CRLF on checkout.
+*.ps1 text eol=crlf
