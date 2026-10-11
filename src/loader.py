@@ -10,6 +10,62 @@ import model_cache as mcache
 import gguf as gguf_backend
 
 from quant import should_quantize, kv_cache_dtype_kwargs, build_max_memory
+from long_context import long_context_kwargs, effective_max_context
+
+
+# ---------------------------------------------------------------------------
+# Long-context load-time helpers
+# ---------------------------------------------------------------------------
+
+def _apply_long_context(config_obj) -> None:
+    """Extend a model config's context window in place (RoPE scaling).
+
+    Roadmap goal: serve very large context (default 250000 tokens) on a small
+    GPU via layer-splitting + quantized KV-cache. When the configured
+    ``MAX_CONTEXT_LENGTH`` exceeds the model's native ``max_position_embeddings``
+    we raise it to the configured value and enable linear RoPE scaling so
+    positional indices beyond native length stay numerically bounded.
+
+    Mutates config_obj in place; never raises.
+    """
+    attrs = set(getattr(config_obj, "__dict__", {}).keys())
+    if "max_position_embeddings" not in attrs:
+        return
+    native = getattr(config_obj, "max_position_embeddings", None) or 4096
+    target = int(getattr(config, "MAX_CONTEXT_LENGTH", 250000))
+    # Never shrink below native; only extend when configured target is larger.
+    if target <= native:
+        return
+    try:
+        config_obj.max_position_embeddings = target
+        # Linear RoPE scaling so longer-than-native sequences stay bounded;
+        # skip if the model already defines rope_scaling.
+        if not getattr(config_obj, "rope_scaling", None):
+            rope = getattr(config_obj, "rope_theta", None)
+            config_obj.rope_scaling = {
+                "type": "linear",
+                "factor": max(1.0, target / max(1, native)),
+            }
+            if rope:
+                config_obj.rope_theta = rope
+        config.log.info(
+            "Long-context: extended %s max_position_embeddings %s -> %s (rope_scaling=%s)",
+            getattr(config_obj, "model_type", "?"), native, target,
+            config_obj.rope_scaling,
+        )
+    except Exception:
+        config.log.warning("Long-context extension failed for %s", getattr(config_obj, "model_type", "?"))
+
+
+def _long_context_load_kwargs(model_class_path: str) -> dict:
+    """Build the ``attn_implementation`` kwarg for from_pretrained.
+
+    ``sdpa`` (torch-built-in) is the default memory-efficient attention; it is
+    supported by all modern decoder architectures. ``flash_attention_2`` is used
+    only when explicitly requested (requires the optional flash-attn package).
+    """
+    return long_context_kwargs()
+
 
 MANIFEST_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models_manifest.json")
 
@@ -233,6 +289,22 @@ def _load_transformers(model_name: str, local_path: str, size_bytes: Optional[in
     pipe = None
     quantized = False
 
+    # Long-context: load the model config once so we can extend its context
+    # window (RoPE scaling / max_position_embeddings) and pass the memory-
+    # efficient attention implementation into every from_pretrained call.
+    lc_cfg = None
+    try:
+        lc_cfg = config.AutoConfig.from_pretrained(
+            local_path, trust_remote_code=True, local_files_only=True,
+        )
+        _apply_long_context(lc_cfg)
+    except Exception:
+        config.log.warning(
+            "Could not pre-load config for long-context extension of %s", model_name,
+        )
+    lc_kwargs = _long_context_load_kwargs(local_path)
+    _cfg_kwarg = {} if lc_cfg is None else {"config": lc_cfg, "attn_implementation": lc_kwargs.get("attn_implementation", "sdpa")}
+
     if should_q4:
         try:
             bnb_cfg = config.BitsAndBytesConfig(
@@ -245,6 +317,7 @@ def _load_transformers(model_name: str, local_path: str, size_bytes: Optional[in
                 local_path, quantization_config=bnb_cfg, device_map="auto",
                 max_memory=build_max_memory(),
                 trust_remote_code=True, local_files_only=True,
+                **_cfg_kwarg,
             )
             tok = config.AutoTokenizer.from_pretrained(local_path, use_fast=False,
                                                         trust_remote_code=True, local_files_only=True)
@@ -264,6 +337,7 @@ def _load_transformers(model_name: str, local_path: str, size_bytes: Optional[in
                     local_path, device_map="auto", torch_dtype=config.torch.float16,
                     max_memory=build_max_memory(),
                     trust_remote_code=True, local_files_only=True,
+                    **_cfg_kwarg,
                 )
                 tok = config.AutoTokenizer.from_pretrained(local_path, use_fast=False,
                                                             trust_remote_code=True, local_files_only=True)
@@ -296,6 +370,10 @@ def _load_transformers(model_name: str, local_path: str, size_bytes: Optional[in
                         local_path, trust_remote_code=True, local_files_only=True,
                     )
                     model_kwargs: dict = {"config": cfg, "trust_remote_code": True, "local_files_only": True}
+                    # Long-context: extend this custom-arch config the same way and
+                    # request the memory-efficient attention implementation.
+                    _apply_long_context(cfg)
+                    model_kwargs["attn_implementation"] = lc_kwargs.get("attn_implementation", "sdpa")
                     if should_q4:
                         model_kwargs["quantization_config"] = config.BitsAndBytesConfig(
                             load_in_4bit=True, bnb_4bit_use_double_quant=True,

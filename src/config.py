@@ -132,6 +132,24 @@ VOICE_SERVER_URL: Optional[str] = os.getenv("VOICE_SERVER_URL") or "http://127.0
 # when the Rust PyO3 inference core is installed and importable.
 RUST_CORE_ENABLED: bool = os.getenv("PRIVATE_AI_DISABLE_RUST_CORE", "").strip().lower() not in {"1", "true", "yes"}
 
+# ---------------------------------------------------------------------------
+# Long-context support (250k-context roadmap)
+#   MAX_CONTEXT_LENGTH: max total tokens (prompt + generated) for the
+#     transformers backend. Default 250000 (the roadmap target for a 30B MoE
+#     over 16GB via layer-splitting + quantized KV-cache). Clamped per-model to
+#     its native max_position_embeddings via RoPE linear scaling when extended.
+#   CONTEXT_BUDGET_TOKENS: conversation budget for context compression — when a
+#     chat request's cumulative token estimate exceeds this, older turns are
+#     evicted (system prompt + recent turns + running summary are kept).
+#   CONTEXT_COMPACTION_MIN_TURNS: min old-turn evictions before summarization.
+MAX_CONTEXT_LENGTH: int = int(os.getenv("MAX_CONTEXT_LENGTH", "250000"))
+CONTEXT_BUDGET_TOKENS: int = int(os.getenv("CONTEXT_BUDGET_TOKENS", "120000"))
+CONTEXT_COMPACTION_MIN_TURNS: int = int(os.getenv("CONTEXT_COMPACTION_MIN_TURNS", "4"))
+CONTEXT_SUMMARY_MODEL: Optional[str] = os.getenv("CONTEXT_SUMMARY_MODEL") or None
+# Memory-efficient attention for long-context generation: sdpa (default, torch
+# built-in), flash_attention_2 (needs flash-attn), eager (fallback).
+TRANSFORMERS_ATTN_IMPL: str = os.getenv("TRANSFORMERS_ATTN_IMPL", "sdpa").strip().lower()
+
 server_start_time: float = time.time()
 download_semaphore = asyncio.Semaphore(MAX_CONCURRENT_PULLS)
 

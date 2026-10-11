@@ -19,6 +19,7 @@ from multimodal import load_multimodal_model, run_multimodal_inference, stream_m
 from schemas import ChatRequest, MultimodalChatRequest
 from utils import with_timeout, gpu_cleanup_fn
 import rust_core_runtime as rrt
+from long_context import compress_messages, effective_max_context, estimate_tokens
 
 router = APIRouter()
 
@@ -39,6 +40,16 @@ async def _stream_chat(model_name: str, messages: List[Dict[str, str]],
     if state.current_model is None:
         yield f"data: {json.dumps({'error': 'No model loaded', 'done': True})}\n\n"
         return
+
+    # Context compression: keep the conversation within CONTEXT_BUDGET_TOKENS.
+    comp = compress_messages(list(messages))
+    if comp["compressed"]:
+        config.log.info(
+            "Context compression engaged (stream) for %s: before=%s after=%s evicted=%s summary=%s",
+            model_name, comp["estimated_tokens_before"], comp["estimated_tokens_after"],
+            len(comp["evicted"]), comp["summary_inserted"],
+        )
+        messages = comp["messages"]
 
     backend = state.model_meta.get(state.current_model_name, {}).get("backend")
     prompt = _build_prompt(messages)
@@ -350,7 +361,18 @@ async def _chat_non_streaming(request: ChatRequest, model_name: str) -> dict:
     if state.current_model is None:
         raise HTTPException(status_code=500, detail="No model loaded.")
 
-    prompt = _build_prompt(request.messages)
+    # Context compression: keep the conversation within CONTEXT_BUDGET_TOKENS.
+    messages = request.messages
+    comp = compress_messages(list(messages))
+    if comp["compressed"]:
+        config.log.info(
+            "Context compression engaged for %s: before=%s after=%s evicted=%s summary=%s",
+            model_name, comp["estimated_tokens_before"], comp["estimated_tokens_after"],
+            len(comp["evicted"]), comp["summary_inserted"],
+        )
+        messages = comp["messages"]
+
+    prompt = _build_prompt(messages)
     backend = state.model_meta.get(state.current_model_name, {}).get("backend")
     return await asyncio.to_thread(generate_response, request, model_name, prompt, backend)
 
