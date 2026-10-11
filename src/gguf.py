@@ -7,19 +7,63 @@ import state
 import model_cache as mcache
 
 
-def build_llama_cpp_prompt(messages: List[Dict[str, str]]) -> str:
+def build_llama_cpp_prompt(messages: List[Dict[str, str]], template: str = "generic") -> str:
+    """Build a llama.cpp chat prompt for the given message list.
+
+    ``template`` selects the chat-markup dialect:
+    - ``generic``: ``<|system|>/<|user|>/<|assistant|>`` (default, generic
+      llama.cpp ``chat`` style)
+    - ``qwen3``: ChatML ``<|im_start|>...<|im_end|>`` with a ``<|im_start|>assistant``
+      suffix — required for Qwen3-family GGUFs (Qwen/Qwen3-30B-A3B etc.); the
+      legacy generic markup makes them emit only a bare special token.
+
+    Roles are mapped per-dialect; unknown roles (e.g. ``tool``) degrade to
+    ``user``. The trailing assistant prompt is appended in the correct dialect.
+    """
     parts = []
     for msg in messages:
         role = msg.get("role", "user")
         content = msg.get("content", "")
-        if role == "system":
-            parts.append(f"<|system|>\n{content}")
-        elif role == "assistant":
-            parts.append(f"<|assistant|>\n{content}")
-        else:  # user, tool, or any unknown role → treat as user
-            parts.append(f"<|user|>\n{content}")
-    parts.append("<|assistant|>")
+        if template == "qwen3":
+            parts.append(f"<|im_start|>{role}\n{content}<|im_end|>\n")
+        else:  # generic
+            if role == "system":
+                parts.append(f"<|system|>\n{content}")
+            elif role == "assistant":
+                parts.append(f"<|assistant|>\n{content}")
+            else:  # user, tool, or any unknown role → treat as user
+                parts.append(f"<|user|>\n{content}")
+    if template == "qwen3":
+        parts.append("<|im_start|>assistant\n")
+    else:
+        parts.append("<|assistant|>")
     return "\n".join(parts)
+
+
+def detect_chat_template(model_name: str = "", gguf_meta: dict | None = None) -> str:
+    """Return the chat-template dialect for a GGUF model.
+
+    Priority:
+    1. An explicit ``chat_template``-style key in ``gguf_meta`` (if present) that
+       contains ``<|im_start|>`` → ``qwen3``.
+    2. Filename/model-name heuristic: tokens indicating a Qwen3-family model
+       (``qwen3``, plus ``moe``/``a3b``/``a17b``/``a18b`` variants) → ``qwen3``.
+    3. Fallback: ``generic``.
+
+    ``model_name`` may be a full HF repo id, a file path, or a bare GGUF
+    filename; matching is case-insensitive.
+    """
+    meta = gguf_meta or {}
+    for key in ("chat_template", "tokenizer.chat_template", "qwen3.chat_template"):
+        val = meta.get(key)
+        if isinstance(val, str) and "<|im_start|>" in val:
+            return "qwen3"
+    name = (model_name or "").lower()
+    # Qwen3-family: also catches "qwen3.5", "qwen3-moe", and the official
+    # "Qwen3-30B-A3B" / "Qwen3.8-...-A17B" MoE naming.
+    if "qwen3" in name and not ("qwen2.5" in name or "qwen2" in name):
+        return "qwen3"
+    return "generic"
 
 
 def load_gguf(model_name: str, gguf_path: str) -> None:

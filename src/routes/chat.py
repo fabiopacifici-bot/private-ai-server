@@ -14,7 +14,7 @@ import state
 import model_cache as mcache
 from loader import load_model, extract_text_from_pipeline_result
 from quant import kv_cache_dtype_kwargs
-from gguf import build_llama_cpp_prompt
+from gguf import build_llama_cpp_prompt, detect_chat_template
 from multimodal import load_multimodal_model, run_multimodal_inference, stream_multimodal_response
 from schemas import ChatRequest, MultimodalChatRequest
 from utils import with_timeout, gpu_cleanup_fn
@@ -141,10 +141,15 @@ async def _stream_transformers(messages, prompt: str, max_tokens: int, temperatu
 
 async def _stream_gguf(messages, max_tokens: int, temperature: float):
     llm = state.current_model
-    prompt_text = build_llama_cpp_prompt(messages)
+    model_name = state.current_model_name or ""
+    template = detect_chat_template(model_name)
+    prompt_text = build_llama_cpp_prompt(messages, template=template)
+    # Qwen3 ChatML terminates turns with <|im_end|>; the generic stop tokens are
+    # only meaningful for the generic dialect.
+    stop = ["<|im_end|>"] if template == "qwen3" else ["<|user|>", "<|system|>"]
     try:
         for chunk in llm(prompt_text, max_tokens=max_tokens, temperature=temperature,
-                         stop=["<|user|>", "<|system|>"], stream=True):
+                         stop=stop, stream=True):
             delta = chunk["choices"][0].get("text", "")
             if delta:
                 yield f"data: {json.dumps({'delta': {'content': delta}, 'done': False})}\n\n"
@@ -327,11 +332,13 @@ def generate_response(request: ChatRequest, model_name: str, prompt: str, backen
 
     if backend == "gguf_llama_cpp":
         llm = state.current_model
-        prompt_text = build_llama_cpp_prompt(request.messages)
+        template = detect_chat_template(model_name)
+        prompt_text = build_llama_cpp_prompt(request.messages, template=template)
+        stop = ["<|im_end|>"] if template == "qwen3" else ["<|user|>", "<|system|>"]
         try:
             start = time.time_ns()
             output = llm(prompt_text, max_tokens=request.max_tokens,
-                         temperature=request.temperature, stop=["<|user|>", "<|system|>"])
+                         temperature=request.temperature, stop=stop)
             duration = time.time_ns() - start
             text = output["choices"][0]["text"].strip()
         except Exception as e:
