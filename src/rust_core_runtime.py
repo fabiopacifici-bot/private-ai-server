@@ -93,7 +93,7 @@ class _RustRuntime:
         self.coordinator = core.make_coordinator(
             max_batch_size=int(os.getenv("RUST_BATCH_SIZE", "4")),
             window_ms=int(os.getenv("RUST_WINDOW_MS", "100")),
-            max_context_window=int(os.getenv("RUST_MAX_CTX", "4096")),
+            max_context_window=int((os.getenv("RUST_MAX_CTX") or os.getenv("MAX_CONTEXT_LENGTH")) or "250000"),
         )
         # Paged-KV block manager (Issue #4 OOM-safety).
         self.kv = core.make_kv_manager(capacity=int(os.getenv("RUST_KV_BLOCKS", "64")))

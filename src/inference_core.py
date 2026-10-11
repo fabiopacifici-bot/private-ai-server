@@ -65,7 +65,7 @@ def core_load_error() -> str:
 
 
 def make_coordinator(max_batch_size: int = 4, window_ms: int = 100,
-                     max_context_window: int = 4096):
+                     max_context_window: int = 250000):
     """Return a Rust :class:`BatchCoordinator`, or ``None`` if the core is
     unavailable. Callers must treat ``None`` as "use the Python sequential
     path". Construction is lazy so a runtime-init failure is contained here.
