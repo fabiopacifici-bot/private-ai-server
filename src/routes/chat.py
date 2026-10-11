@@ -15,6 +15,7 @@ import model_cache as mcache
 from loader import load_model, extract_text_from_pipeline_result
 from quant import kv_cache_dtype_kwargs
 from gguf import build_llama_cpp_prompt, detect_chat_template
+import gguf
 from multimodal import load_multimodal_model, run_multimodal_inference, stream_multimodal_response
 from schemas import ChatRequest, MultimodalChatRequest
 from utils import with_timeout, gpu_cleanup_fn
@@ -147,16 +148,24 @@ async def _stream_gguf(messages, max_tokens: int, temperature: float):
     # Qwen3 ChatML terminates turns with <|im_end|>; the generic stop tokens are
     # only meaningful for the generic dialect.
     stop = ["<|im_end|>"] if template == "qwen3" else ["<|user|>", "<|system|>"]
+    # The shared Llama instance is not thread-safe; hold the inference lock for
+    # the whole stream. Acquired via executor so a waiting request never blocks
+    # the event loop (the lock stays held across yields — that is the point).
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, gguf.infer_lock.acquire)
     try:
-        for chunk in llm(prompt_text, max_tokens=max_tokens, temperature=temperature,
-                         stop=stop, stream=True):
-            delta = chunk["choices"][0].get("text", "")
-            if delta:
-                yield f"data: {json.dumps({'delta': {'content': delta}, 'done': False})}\n\n"
-        yield f"data: {json.dumps({'delta': {}, 'done': True})}\n\n"
-    except Exception as e:
-        config.log.exception("GGUF streaming failed")
-        yield f"data: {json.dumps({'error': str(e), 'done': True})}\n\n"
+        try:
+            for chunk in llm(prompt_text, max_tokens=max_tokens, temperature=temperature,
+                             stop=stop, stream=True):
+                delta = chunk["choices"][0].get("text", "")
+                if delta:
+                    yield f"data: {json.dumps({'delta': {'content': delta}, 'done': False})}\n\n"
+            yield f"data: {json.dumps({'delta': {}, 'done': True})}\n\n"
+        except Exception as e:
+            config.log.exception("GGUF streaming failed")
+            yield f"data: {json.dumps({'error': str(e), 'done': True})}\n\n"
+    finally:
+        gguf.infer_lock.release()
 
 
 # ---------------------------------------------------------------------------
@@ -335,28 +344,15 @@ def generate_response(request: ChatRequest, model_name: str, prompt: str, backen
         template = detect_chat_template(model_name)
         prompt_text = build_llama_cpp_prompt(request.messages, template=template)
         stop = ["<|im_end|>"] if template == "qwen3" else ["<|user|>", "<|system|>"]
-        # Rust continuous-batching engagement (same contract as transformers):
-        # open a paged-KV stream + submit the request to the coordinator when
-        # the core is loaded. Non-engagement degrades to the sequential path.
-        rt_enabled = getattr(config, "RUST_CORE_ENABLED", True)
-        _rt = rrt.get_runtime() if rt_enabled else None
-        _rid = f"gen-{uuid.uuid4().hex[:12]}"
-        _stream_id = None
-        _enq_accepted = ""
-        if _rt is not None and _rt.engaged:
-            _stream_id = rrt.begin_stream(_rt, _rid, approx_tokens=max(1, request.max_tokens))
-            _ptoks = [max(0, ord(c) % 65536) for c in prompt_text[:4096]]
-            _enq_accepted = rrt.coordinator_submit_blocking(
-                _rt, _rid, _ptoks, max_tokens=request.max_tokens)
-            config.log.info(
-                "Rust batch coordinator engaged (gguf): request=%s stream=%s accepted=%s",
-                _rid, _stream_id, _enq_accepted or "n/a",
-            )
+        # Serialize on the shared Llama instance (not thread-safe; concurrent
+        # calls crashed CUDA). This path runs in a worker thread, so a plain
+        # with-block is deadlock-free.
         try:
-            start = time.time_ns()
-            output = llm(prompt_text, max_tokens=request.max_tokens,
-                         temperature=request.temperature, stop=stop)
-            duration = time.time_ns() - start
+            with gguf.infer_lock:
+                start = time.time_ns()
+                output = llm(prompt_text, max_tokens=request.max_tokens,
+                             temperature=request.temperature, stop=stop)
+                duration = time.time_ns() - start
             text = output["choices"][0]["text"].strip()
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"GGUF generation failed: {e}")

@@ -1,10 +1,16 @@
 import os
+import threading
 import time
 from typing import List, Dict
 
 import config
 import state
 import model_cache as mcache
+
+# The shared Llama instance (MAX_CACHE_MODELS=1) is NOT thread-safe: concurrent
+# requests on the same instance crashed CUDA (observed on Qwen3-30B-A3B). All
+# GGUF inference — streaming and non-streaming — must run under this lock.
+infer_lock = threading.Lock()
 
 
 def build_llama_cpp_prompt(messages: List[Dict[str, str]], template: str = "generic") -> str:
@@ -74,12 +80,17 @@ def load_gguf(model_name: str, gguf_path: str) -> None:
 
     n_gpu_layers = int(os.getenv("GGUF_N_GPU_LAYERS", "-1"))  # -1 offloads all layers to GPU
     n_ctx = int(os.getenv("GGUF_N_CTX", "4096"))
-    config.log.info("Loading GGUF with llama-cpp-python: %s (n_gpu_layers=%s, n_ctx=%s)",
-                    gguf_path, n_gpu_layers, n_ctx)
+    # Prompt-processing batch size. Benchmarked on Qwen3-30B-A3B Q2_K (4090 16GB,
+    # this llama-cpp-python build): 512 -> 126, 1024 -> 146, 2048 -> 137 t/s.
+    # 1024 is the sweet spot and the default.
+    n_batch = int(os.getenv("GGUF_N_BATCH", "1024"))
+    config.log.info("Loading GGUF with llama-cpp-python: %s (n_gpu_layers=%s, n_ctx=%s, n_batch=%s)",
+                    gguf_path, n_gpu_layers, n_ctx, n_batch)
 
     start_ns = time.time_ns()
     try:
-        mdl = config.LlamaCpp(model_path=gguf_path, n_gpu_layers=n_gpu_layers, n_ctx=n_ctx, verbose=False)
+        mdl = config.LlamaCpp(model_path=gguf_path, n_gpu_layers=n_gpu_layers, n_ctx=n_ctx,
+                              n_batch=n_batch, verbose=False)
     except Exception as e:
         config.log.exception("llama-cpp-python failed for %s", gguf_path)
         msg = str(e)
@@ -104,4 +115,5 @@ def load_gguf(model_name: str, gguf_path: str) -> None:
         "local_path": gguf_path,
         "n_gpu_layers": n_gpu_layers,
         "n_ctx": n_ctx,
+        "n_batch": n_batch,
     })
