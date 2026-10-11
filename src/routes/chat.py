@@ -335,6 +335,23 @@ def generate_response(request: ChatRequest, model_name: str, prompt: str, backen
         template = detect_chat_template(model_name)
         prompt_text = build_llama_cpp_prompt(request.messages, template=template)
         stop = ["<|im_end|>"] if template == "qwen3" else ["<|user|>", "<|system|>"]
+        # Rust continuous-batching engagement (same contract as transformers):
+        # open a paged-KV stream + submit the request to the coordinator when
+        # the core is loaded. Non-engagement degrades to the sequential path.
+        rt_enabled = getattr(config, "RUST_CORE_ENABLED", True)
+        _rt = rrt.get_runtime() if rt_enabled else None
+        _rid = f"gen-{uuid.uuid4().hex[:12]}"
+        _stream_id = None
+        _enq_accepted = ""
+        if _rt is not None and _rt.engaged:
+            _stream_id = rrt.begin_stream(_rt, _rid, approx_tokens=max(1, request.max_tokens))
+            _ptoks = [max(0, ord(c) % 65536) for c in prompt_text[:4096]]
+            _enq_accepted = rrt.coordinator_submit_blocking(
+                _rt, _rid, _ptoks, max_tokens=request.max_tokens)
+            config.log.info(
+                "Rust batch coordinator engaged (gguf): request=%s stream=%s accepted=%s",
+                _rid, _stream_id, _enq_accepted or "n/a",
+            )
         try:
             start = time.time_ns()
             output = llm(prompt_text, max_tokens=request.max_tokens,

@@ -364,6 +364,9 @@ def _register_gguf(model_name: str) -> dict:
         "backend": "gguf_llama_cpp", "local_path": gguf_path,
         "size_bytes": os.path.getsize(gguf_path),
     }
+    # Persist immediately so the GGUF registration survives a server restart
+    # (load_manifest() re-hydrates state.model_meta on boot).
+    save_manifest()
     job_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat() + "Z"
     get_job_db().create_job({

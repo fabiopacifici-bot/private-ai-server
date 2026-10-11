@@ -6,6 +6,9 @@ pydantic>=1.10.0
 accelerate
 huggingface-hub
 bitsandbytes
+# Optional: AWQ 4-bit pre-quantized checkpoints (TRANSFORMERS_QUANT=awq).
+# Skipped safely when absent.
+autoawq
 llama-cpp-python>=0.3.34
 Pillow
 soundfile

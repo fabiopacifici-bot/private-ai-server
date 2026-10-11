@@ -281,6 +281,35 @@ def _load_transformers(model_name: str, local_path: str, size_bytes: Optional[in
 
     preferred_quant = state.model_meta.get(model_name, {}).get("preferred_quantized")
     forced_quant = getattr(config, "TRANSFORMERS_QUANT", "auto").strip().lower()
+
+    # AWQ path — pre-quantized 4-bit weights via autoawq's AwqConfig, wired
+    # end-to-end when the engine + a quantized checkpoint are available.
+    # Degrades to the auto NF4 decision when either is missing (non-breaking).
+    if forced_quant == "awq":
+        if getattr(config, "autoawq_available", False) and getattr(config, "awq_config_available", False):
+            try:
+                config.log.info("AWQ load for %s (pre-quantized 4-bit)", model_name)
+                awq_cfg = config.AwqConfig(bits=4, zero_point=True, version="gemm")
+                model = config.AutoModelForCausalLM.from_pretrained(
+                    local_path, quantization_config=awq_cfg, device_map="auto",
+                    trust_remote_code=True, local_files_only=True,
+                )
+                tok = config.AutoTokenizer.from_pretrained(
+                    local_path, use_fast=False, trust_remote_code=True, local_files_only=True)
+                if tok.pad_token is None:
+                    tok.pad_token = tok.eos_token
+                pipe = config.pipeline("text-generation", model=model, tokenizer=tok,
+                                       device=0, token=os.environ.get("HUGGINGFACE_TOKEN"))
+                quantized = True
+                config.log.info("✅ AWQ load succeeded for %s", model_name)
+            except Exception:
+                config.log.exception("AWQ load failed for %s; falling back to auto", model_name)
+        else:
+            config.log.warning(
+                "TRANSFORMERS_QUANT=awq requested but autoawq/AwqConfig unavailable "
+                "— falling back to auto (NF4). Install autoawq to enable AWQ."
+            )
+
     should_q4 = should_quantize(
         forced_quant, preferred_quant,
         bool(config.bitsandbytes_available), device, size_bytes,

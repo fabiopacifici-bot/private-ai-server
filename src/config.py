@@ -88,6 +88,24 @@ except Exception:
     BitsAndBytesConfig = None
     bitsandbytes_available = False
 
+# AWQ (activation-aware weight quantization) — optional engine. When
+# TRANSFORMERS_QUANT=awq and autoawq is installed, pre-quantized 4-bit
+# .safetensors checkpoints are loaded via AwqConfig. Absent the engine the
+# mode degrades to the auto NF4 decision (non-breaking).
+try:
+    from awq import AutoAWQForCausalLM  # noqa: F401 — presence probe only
+    autoawq_available = True
+except Exception:
+    AutoAWQForCausalLM = None
+    autoawq_available = False
+
+try:
+    from transformers import AwqConfig
+    awq_config_available = True
+except Exception:
+    AwqConfig = None
+    awq_config_available = False
+
 try:
     from llama_cpp import Llama as LlamaCpp
     llama_cpp_available = True
